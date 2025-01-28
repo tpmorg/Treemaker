@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @media print {
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+}
+
+@layer components {
+  .tree-node {
+    @apply bg-white border border-gray-300 rounded-lg p-4 shadow-sm;
+    @apply print:border-black print:shadow-none;
+  }
+
+  .tree-connector {
+    @apply bg-gray-300 print:bg-black;
+  }
+
+  .tree-connector-vertical {
+    @apply tree-connector w-0.5 absolute left-1/2 -translate-x-1/2;
+  }
+
+  .tree-connector-horizontal {
+    @apply tree-connector h-0.5;
+  }
+}
