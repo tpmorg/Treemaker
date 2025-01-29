@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   @media print {
@@ -17,15 +15,11 @@
     @apply print:border-black print:shadow-none;
   }
 
-  .tree-connector {
-    @apply bg-gray-300 print:bg-black;
-  }
-
   .tree-connector-vertical {
-    @apply tree-connector w-0.5 absolute left-1/2 -translate-x-1/2;
+    @apply w-0.5 absolute left-1/2 -translate-x-1/2 bg-gray-300 print:bg-black;
   }
 
   .tree-connector-horizontal {
-    @apply tree-connector h-0.5;
+    @apply h-0.5 bg-gray-300 print:bg-black;
   }
 }
