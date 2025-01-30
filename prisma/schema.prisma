@@ -1,0 +1,93 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  trees     Tree[]
+}
+
+model Tree {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  nodes       Node[]
+  people      Person[]
+  layouts     Layout[]
+  owner       User     @relation(fields: [ownerId], references: [id])
+  ownerId     String
+}
+
+model Person {
+  id         String    @id @default(cuid())
+  firstName  String
+  lastName   String?
+  birthDate  DateTime?
+  deathDate  DateTime?
+  gender     String?
+  notes      String?
+  tree       Tree      @relation(fields: [treeId], references: [id])
+  treeId     String
+  nodes      Node[]    @relation("PersonToNode")
+  media      Media[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Node {
+  id        String   @id @default(cuid())
+  type      String   // e.g., "PARENT", "SPOUSE", "CHILD"
+  person    Person   @relation("PersonToNode", fields: [personId], references: [id])
+  personId  String
+  relatedTo Node[]   @relation("NodeToNode")
+  relatedBy Node[]   @relation("NodeToNode")
+  tree      Tree     @relation(fields: [treeId], references: [id])
+  treeId    String
+  position  Json?    // Stores x,y coordinates for visual layout
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  url         String
+  type        String   // e.g., "IMAGE", "DOCUMENT", "VIDEO"
+  title       String?
+  description String?
+  person      Person   @relation(fields: [personId], references: [id])
+  personId    String
+  layout      Layout?  @relation(fields: [layoutId], references: [id])
+  layoutId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Layout {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // e.g., "TREE", "TIMELINE", "GALLERY"
+  config      Json     // Stores layout-specific configuration
+  isDefault   Boolean  @default(false)
+  tree        Tree     @relation(fields: [treeId], references: [id])
+  treeId      String
+  media       Media[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
