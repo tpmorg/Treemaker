@@ -1,22 +1,41 @@
-# sv
+# TreeMaker
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A family tree visualization application built with SvelteKit and TypeScript.
 
-## Creating a project
+## Tech Stack
 
-If you're seeing this, you've probably already done this step. Congrats!
+- **Frontend Framework**: SvelteKit 2.16.0 with Svelte 5.0.0
+- **Styling**: TailwindCSS
+- **Database**: SQLite with Prisma ORM
+- **Build Tool**: Vite 6.0.0
+- **Language**: TypeScript 5.0.0
 
+## Prerequisites
+
+- Node.js
+- npm/pnpm/yarn
+- SQLite
+
+## Setup
+
+1. Clone the repository
+2. Install dependencies:
 ```bash
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+npm install
 ```
 
-## Developing
+3. Set up the database:
+```bash
+# Initialize Prisma
+npx prisma generate
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+# Run migrations
+npx prisma migrate dev
+```
+
+## Development
+
+Start the development server:
 
 ```bash
 npm run dev
@@ -27,7 +46,7 @@ npm run dev -- --open
 
 ## Building
 
-To create a production version of your app:
+To create a production version of the app:
 
 ```bash
 npm run build
@@ -35,4 +54,33 @@ npm run build
 
 You can preview the production build with `npm run preview`.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run check` - Run type checking
+- `npm run check:watch` - Run type checking in watch mode
+- `npm run prepare` - Sync SvelteKit files
+
+## Dependencies
+
+### Production Dependencies
+- @prisma/client: ^6.3.0
+- prisma: ^6.3.0
+- sqlite3: ^5.1.7
+
+### Development Dependencies
+- @sveltejs/adapter-auto: ^4.0.0
+- @sveltejs/kit: ^2.16.0
+- @sveltejs/vite-plugin-svelte: ^5.0.0
+- @tailwindcss/postcss: ^4.0.0
+- @tailwindcss/vite: ^4.0.0
+- @types/node: ^22.12.0
+- autoprefixer: ^10.4.20
+- svelte: ^5.0.0
+- svelte-check: ^4.0.0
+- typescript: ^5.0.0
+- vite: ^6.0.0
+
+> Note: To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
