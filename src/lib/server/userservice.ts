@@ -1,4 +1,4 @@
-import { prisma } from './prismaservice';
+import { prisma } from '$lib/server/prismaservice';
 import type { User } from '@prisma/client';
 import { generateId } from 'lucia';
 import { Argon2id } from 'oslo/password';
