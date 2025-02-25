@@ -1,6 +1,20 @@
 import { auth } from '$lib/server/lucia';
 import type { Handle } from '@sveltejs/kit';
 
+// Sanitize user data by excluding sensitive fields and converting binary data
+function sanitizeUser(user: any) {
+    if (!user) return null;
+    const { recoveryCode, ...safeUser } = user;
+    return {
+        ...safeUser,
+        // Only include fields we need on the client
+        userId: user.userId,
+        email: user.email,
+        username: user.username,
+        emailVerified: user.emailVerified
+    };
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(auth.sessionCookieName);
 	if (!sessionId || sessionId === '') {
@@ -26,7 +40,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		});
 	}
 	event.locals.auth = auth;
-	event.locals.user = user;
+	event.locals.user = sanitizeUser(user);
 	event.locals.session = session;
 	return await resolve(event);
 };
