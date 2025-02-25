@@ -3,7 +3,7 @@ import type { Handle } from '@sveltejs/kit';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(auth.sessionCookieName);
-	if (!sessionId) {
+	if (!sessionId || sessionId === '') {
 		event.locals.auth = auth;
 		event.locals.user = null;
 		event.locals.session = null;
@@ -13,15 +13,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const { session, user } = await auth.validateSession(sessionId);
 	if (session && session.fresh) {
 		const sessionCookie = auth.createSessionCookie(session.id);
-		event.cookies.set(sessionCookie.name, sessionCookie.value, {
-			path: '.',
+		event.cookies.set(auth.sessionCookieName, sessionCookie.value, {
+			path: '/',
 			...sessionCookie.attributes
 		});
 	}
 	if (!session) {
 		const sessionCookie = auth.createBlankSessionCookie();
 		event.cookies.set(sessionCookie.name, sessionCookie.value, {
-			path: '.',
+			path: '/',
 			...sessionCookie.attributes
 		});
 	}
