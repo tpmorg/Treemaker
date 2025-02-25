@@ -1,8 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { prisma } from '$lib/server/prismaservice';
+import type { Tree } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals }) => {
+    // Check if user is authenticated
     if (!locals.user) {
         throw redirect(302, '/');
     }

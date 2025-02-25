@@ -1,6 +1,35 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
   import { page } from "$app/stores";
+  import AddPersonForm from "$lib/components/AddPersonForm.svelte";
+  import AddMediaForm from "$lib/components/AddMediaForm.svelte";
+
+  // Define types for our data
+  interface Tree {
+    id: string;
+    name: string;
+    description?: string;
+  }
+  
+  interface Person {
+    id: string;
+    firstName: string;
+    lastName?: string;
+    birthDate?: string;
+    deathDate?: string;
+    gender?: string;
+    notes?: string;
+    treeId: string;
+    createdAt: string;
+  }
+  
+  // Tree and person management
+  let selectedTreeId = "";
+  let selectedPersonId = "";
+  let showPersonForm = false;
+  let showMediaForm = false;
+  let trees: Tree[] = [];
+  let people: Person[] = [];
 
   let changePasswordForm = {
     currentPassword: "",
@@ -107,6 +136,70 @@
       errors.totpCode = "Failed to verify code";
     }
   };
+  
+  // Fetch user's trees on page load
+  const fetchTrees = async () => {
+    try {
+      const response = await fetch('/api/trees');
+      const result = await response.json();
+      
+      if (result.success) {
+        trees = result.trees;
+        if (trees.length > 0) {
+          selectedTreeId = trees[0].id;
+          fetchPeople(selectedTreeId);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching trees:', error);
+    }
+  };
+  
+  // Fetch people for a selected tree
+  const fetchPeople = async (treeId: string) => {
+    if (!treeId) return;
+    
+    try {
+      const response = await fetch(`/api/people?treeId=${treeId}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        people = result.people;
+      }
+    } catch (error) {
+      console.error('Error fetching people:', error);
+    }
+  };
+  
+  // Handle tree selection change
+  const handleTreeChange = (event: Event) => {
+    const select = event.target as HTMLSelectElement;
+    selectedTreeId = select.value;
+    selectedPersonId = "";
+    fetchPeople(selectedTreeId);
+  };
+  
+  // Handle person selection change
+  const handlePersonChange = (event: Event) => {
+    const select = event.target as HTMLSelectElement;
+    selectedPersonId = select.value;
+  };
+  
+  // Handle when a new person is added
+  const handlePersonAdded = (event: CustomEvent) => {
+    const newPerson = event.detail;
+    people = [newPerson, ...people];
+    selectedPersonId = newPerson.id;
+    showPersonForm = false;
+  };
+  
+  // Handle when new media is added
+  const handleMediaAdded = () => {
+    showMediaForm = false;
+  };
+  
+  // Initialize data on page load
+  fetchTrees();
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -257,5 +350,92 @@
         </div>
       {/if}
     </div>
+  </div>
+  
+  <!-- Family Tree Management Section -->
+  <div class="max-w-4xl mx-auto py-8 px-4">
+    <h1 class="text-3xl font-bold text-gray-900 mb-8">Family Tree Management</h1>
+    
+    <!-- Tree and Person Selection -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+      <h2 class="text-xl font-semibold text-gray-800 mb-6">Select Tree and Person</h2>
+      
+      {#if trees.length === 0}
+        <div class="p-4 bg-yellow-50 rounded-md mb-4">
+          <p class="text-yellow-700">You don't have any family trees yet. Create one to get started.</p>
+        </div>
+      {:else}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label for="treeSelect" class="block text-sm font-medium text-gray-700 mb-1">
+              Select Family Tree
+            </label>
+            <select
+              id="treeSelect"
+              value={selectedTreeId}
+              on:change={handleTreeChange}
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="" disabled>Select a tree</option>
+              {#each trees as tree}
+                <option value={tree.id}>{tree.name}</option>
+              {/each}
+            </select>
+          </div>
+          
+          <div>
+            <label for="personSelect" class="block text-sm font-medium text-gray-700 mb-1">
+              Select Person
+            </label>
+            <select
+              id="personSelect"
+              value={selectedPersonId}
+              on:change={handlePersonChange}
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              disabled={!selectedTreeId || people.length === 0}
+            >
+              <option value="" disabled>Select a person</option>
+              {#each people as person}
+                <option value={person.id}>{person.firstName} {person.lastName || ''}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+        
+        <div class="flex flex-wrap gap-4">
+          <button
+            on:click={() => { showPersonForm = !showPersonForm; showMediaForm = false; }}
+            class="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            disabled={!selectedTreeId}
+          >
+            {showPersonForm ? 'Cancel' : 'Add New Person'}
+          </button>
+          
+          <button
+            on:click={() => { showMediaForm = !showMediaForm; showPersonForm = false; }}
+            class="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            disabled={!selectedPersonId}
+          >
+            {showMediaForm ? 'Cancel' : 'Add Media'}
+          </button>
+        </div>
+      {/if}
+    </div>
+    
+    <!-- Add Person Form -->
+    {#if showPersonForm && selectedTreeId}
+      <AddPersonForm 
+        treeId={selectedTreeId} 
+        on:personAdded={handlePersonAdded} 
+      />
+    {/if}
+    
+    <!-- Add Media Form -->
+    {#if showMediaForm && selectedPersonId}
+      <AddMediaForm 
+        personId={selectedPersonId} 
+        on:mediaAdded={handleMediaAdded} 
+      />
+    {/if}
   </div>
 </div>

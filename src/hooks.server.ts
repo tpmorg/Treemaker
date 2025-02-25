@@ -25,6 +25,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const { session, user } = await auth.validateSession(sessionId);
+	
 	if (session && session.fresh) {
 		const sessionCookie = auth.createSessionCookie(session.id);
 		event.cookies.set(auth.sessionCookieName, sessionCookie.value, {
