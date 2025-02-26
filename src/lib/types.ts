@@ -20,8 +20,15 @@ export interface Person {
   gender?: string;
   notes?: string;
   treeId: string;
+  userId?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  username: string;
 }
 
 export interface Media {

@@ -37,17 +37,34 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         let birthDate = data.birthDate ? new Date(data.birthDate) : undefined;
         let deathDate = data.deathDate ? new Date(data.deathDate) : undefined;
         
+        // Prepare person data
+        const personData: any = {
+            firstName: data.firstName,
+            lastName: data.lastName || null,
+            birthDate,
+            deathDate,
+            gender: data.gender || null,
+            notes: data.notes || null,
+            treeId: data.treeId
+        };
+        
+        // If userId is provided, verify the user exists
+        if (data.userId) {
+            const userExists = await prisma.user.findUnique({
+                where: { id: data.userId }
+            });
+            
+            if (!userExists) {
+                return json({ success: false, error: 'User not found' }, { status: 404 });
+            }
+            
+            // Add userId to person data
+            personData.userId = data.userId;
+        }
+        
         // Create the person
         const person = await prisma.person.create({
-            data: {
-                firstName: data.firstName,
-                lastName: data.lastName || null,
-                birthDate,
-                deathDate,
-                gender: data.gender || null,
-                notes: data.notes || null,
-                treeId: data.treeId
-            }
+            data: personData
         });
         
         return json({ 

@@ -15,17 +15,18 @@ model User {
   totp_key       Bytes?
   recovery_code  Bytes
   auth_session   Session[]
-  key           Key[]
+  key            Key[]
   trees          Tree[]
+  person         Person?
 }
 
 model Session {
-  id                   String @id
-  user_id              String
-  active_expires       BigInt
-  idle_expires         BigInt
-  two_factor_verified  Int    @default(0)
-  user                 User   @relation(fields: [user_id], references: [id])
+  id                  String @id
+  user_id             String
+  active_expires      BigInt
+  idle_expires        BigInt
+  two_factor_verified Int    @default(0)
+  user                User   @relation(fields: [user_id], references: [id])
 
   @@index([user_id])
 }
@@ -53,31 +54,33 @@ model Tree {
 }
 
 model Person {
-  id         String    @id @default(cuid())
-  firstName  String
-  lastName   String?
-  birthDate  DateTime?
-  deathDate  DateTime?
-  gender     String?
-  notes      String?
-  tree       Tree      @relation(fields: [treeId], references: [id])
-  treeId     String
-  nodes      Node[]    @relation("PersonToNode")
-  media      Media[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  firstName String
+  lastName  String?
+  birthDate DateTime?
+  deathDate DateTime?
+  gender    String?
+  notes     String?
+  tree      Tree      @relation(fields: [treeId], references: [id])
+  treeId    String
+  nodes     Node[]    @relation("PersonToNode")
+  media     Media[]
+  user      User?     @relation(fields: [userId], references: [id])
+  userId    String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Node {
   id        String   @id @default(cuid())
-  type      String   // e.g., "PARENT", "SPOUSE", "CHILD"
+  type      String // e.g., "PARENT", "SPOUSE", "CHILD"
   person    Person   @relation("PersonToNode", fields: [personId], references: [id])
   personId  String
   relatedTo Node[]   @relation("NodeToNode")
   relatedBy Node[]   @relation("NodeToNode")
   tree      Tree     @relation(fields: [treeId], references: [id])
   treeId    String
-  position  String?  // Stores x,y coordinates for visual layout as JSON string
+  position  String? // Stores x,y coordinates for visual layout as JSON string
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -85,7 +88,7 @@ model Node {
 model Media {
   id          String   @id @default(cuid())
   url         String
-  type        String   // e.g., "IMAGE", "DOCUMENT", "VIDEO"
+  type        String // e.g., "IMAGE", "DOCUMENT", "VIDEO"
   title       String?
   description String?
   person      Person   @relation(fields: [personId], references: [id])
@@ -97,14 +100,14 @@ model Media {
 }
 
 model Layout {
-  id          String   @id @default(cuid())
-  name        String
-  type        String   // e.g., "TREE", "TIMELINE", "GALLERY"
-  config      String   // Stores layout-specific configuration as JSON string
-  isDefault   Boolean  @default(false)
-  tree        Tree     @relation(fields: [treeId], references: [id])
-  treeId      String
-  media       Media[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  type      String // e.g., "TREE", "TIMELINE", "GALLERY"
+  config    String // Stores layout-specific configuration as JSON string
+  isDefault Boolean  @default(false)
+  tree      Tree     @relation(fields: [treeId], references: [id])
+  treeId    String
+  media     Media[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

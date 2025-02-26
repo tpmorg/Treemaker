@@ -31,7 +31,7 @@
     
     if (!formData.url) {
       errors.url = 'Media URL is required';
-    }
+    } 
     
     if (!formData.type) {
       errors.type = 'Media type is required';
