@@ -22,11 +22,9 @@
   let error: string | null = null;
   let showAddPersonForm = false;
   let showAddExistingUserForm = false;
-  let showPersonSearchForm = false;
   let addingRootPerson = false;
   let relatedToPersonId: string | null = null;
   let existingUserRelationshipType: 'parent' | 'child' | 'sibling' | null = null;
-  let personSearchRelationshipType: 'parent' | 'child' | 'sibling' | null = null;
   let activeTab: 'create' | 'search' = 'create';
   let selectedSearchPerson: { id: string; firstName: string; lastName: string | null } | null = null;
   
@@ -191,22 +189,6 @@
     relatedToPersonId = null;
   }
   
-  function handleSearchPerson(event: CustomEvent<{
-    relationshipType: 'parent' | 'child' | 'sibling';
-    personId: string;
-  }>) {
-    const { relationshipType: relType, personId } = event.detail;
-    selectedPersonId = personId;
-    personSearchRelationshipType = relType;
-    relatedToPersonId = personId;
-    showPersonSearchForm = true;
-  }
-  
-  function handleClosePersonSearchForm() {
-    showPersonSearchForm = false;
-    personSearchRelationshipType = null;
-    relatedToPersonId = null;
-  }
   
   function handlePersonSelected(event: CustomEvent<{
     id: string;
@@ -494,37 +476,6 @@
       </div>
     {/if}
     
-    {#if showPersonSearchForm}
-      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-          <div class="p-4 border-b flex justify-between items-center">
-            <h3 class="text-lg font-semibold">
-              {#if personSearchRelationshipType && relatedPerson}
-                Find Existing Person as {personSearchRelationshipType.charAt(0).toUpperCase() + personSearchRelationshipType.slice(1)} for {relatedPerson.firstName} {relatedPerson.lastName || ''}
-              {:else}
-                Find Person
-              {/if}
-            </h3>
-            <button
-              on:click={handleClosePersonSearchForm}
-              class="text-gray-400 hover:text-gray-600"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="p-4">
-            <PersonSearch
-              placeholder="Search by first or last name"
-              label="Find Person"
-              on:personSelected={handlePersonSelected}
-              on:cancel={handleClosePersonSearchForm}
-            />
-          </div>
-        </div>
-      </div>
-    {/if}
     
     <!-- Main tree canvas -->
     <TreeCanvas
@@ -537,30 +488,9 @@
       on:addSibling={handleAddSibling}
       on:editPerson={handleEditPerson}
       on:addPerson={handleAddPerson}
-      on:searchParent={(e) => handleSearchPerson({ detail: { relationshipType: 'parent', personId: e.detail.personId } })}
-      on:searchChild={(e) => handleSearchPerson({ detail: { relationshipType: 'child', personId: e.detail.personId } })}
-      on:searchSibling={(e) => handleSearchPerson({ detail: { relationshipType: 'sibling', personId: e.detail.personId } })}
     />
     
-    <!-- Node actions panel - shown when a node is selected -->
-    {#if selectedPerson && (selectedNodeId || relationshipType) && !showAddPersonForm && !showAddExistingUserForm}
-      <div class="fixed bottom-4 right-4 z-10 max-w-md">
-        <NodeActions
-          person={selectedPerson}
-          {relationshipType}
-          relatedToPerson={relatedPerson}
-          on:close={handleCloseActions}
-          on:addPerson={(e) => {
-            const { relationshipType, relatedToPersonId } = e.detail;
-            if (relationshipType && relatedToPersonId) {
-              showAddPersonForm = true;
-            }
-          }}
-          on:addExistingUser={handleAddExistingUser}
-          on:editPerson={handleEditPerson}
-        />
-      </div>
-    {/if}
+    <!-- Node action panel removed -->
   {/if}
 </div>
 

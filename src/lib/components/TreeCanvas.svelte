@@ -12,8 +12,9 @@
   
   // State
   let treeContainer: HTMLDivElement;
-  let zoomLevel = 1;
+  let zoomLevel = 0.8; // Start at 80% zoom
   let selectedNodeId: string | null = null;
+  let selectedPersonId: string | null = null;
   let isPanning = false;
   let startPanX = 0;
   let startPanY = 0;
@@ -28,9 +29,6 @@
     addSibling: { personId: string };
     editPerson: { personId: string };
     addPerson: {};
-    searchParent: { personId: string };
-    searchChild: { personId: string };
-    searchSibling: { personId: string };
   }>();
   
   // Helper functions
@@ -59,6 +57,9 @@
     relationshipType: string;
   }
 
+  // Map for storing cached family relationships
+  const familyRelationshipsCache = new Map<string, any>();
+  
   // Get family relationship data from the API
   async function getFamilyRelationships(personId: string): Promise<any> {
     try {
@@ -77,21 +78,17 @@
     }
   }
   
-  // Map for storing cached family relationships
-  const familyRelationshipsCache = new Map<string, any>();
-  
-  // Synchronous version that returns cached data for the layout algorithm
+  // Get cached relationships for the layout algorithm
   function getCachedRelationships(): NodeRelationship[] {
     const relationships: NodeRelationship[] = [];
     
-    // Use only the relationships that we've already fetched
     nodes.forEach(node => {
       const personId = node.personId;
       const cachedData = familyRelationshipsCache.get(personId);
       
       if (!cachedData) return;
       
-      // Add parent-child relationships
+      // Add parent relationships
       if (cachedData.parents) {
         cachedData.parents.forEach((parent: any) => {
           const parentNode = findNode(parent.id);
@@ -105,7 +102,7 @@
         });
       }
       
-      // Add child-parent relationships
+      // Add child relationships
       if (cachedData.children) {
         cachedData.children.forEach((child: any) => {
           const childNode = findNode(child.id);
@@ -137,13 +134,10 @@
     return relationships;
   }
   
-  // Async function to fetch and populate the cache
+  // Load family relationships data
   async function loadAllFamilyRelationships() {
-    // Fetch relationships for each person and cache them
     const fetchPromises = nodes.map(async node => {
       const personId = node.personId;
-      
-      // Skip if already in cache
       if (familyRelationshipsCache.has(personId)) return;
       
       try {
@@ -157,73 +151,103 @@
     });
     
     await Promise.all(fetchPromises);
-    
-    // Force a reactive update after loading all data
     treeData = calculateTreeLayout(startingNodeId, nodes, people);
   }
   
-  // Trigger loading relationships when nodes or people change
+  // Load relationships when data changes
   $: {
     if (nodes.length > 0 && people.length > 0) {
       loadAllFamilyRelationships();
     }
   }
   
-  // Parse relationship data using the cache
+  // Get relationships from cached data
   function parseRelationships(): NodeRelationship[] {
     return getCachedRelationships();
   }
-  
+
   // Find parent nodes for a node
   function getParentNodes(nodeId: string): TreeNode[] {
-    const relationships = parseRelationships();
-    const parentRelationships = relationships.filter(
-      rel => rel.relationshipType === 'PARENT' && rel.relatedNodeId === nodeId
-    );
-    
-    return parentRelationships
+    const relationships = getCachedRelationships();
+    return relationships
+      .filter(rel => rel.relationshipType === 'PARENT' && rel.relatedNodeId === nodeId)
       .map(rel => getNodeById(rel.nodeId))
       .filter((node): node is TreeNode => !!node);
   }
   
   // Find children nodes for a node
   function getChildNodes(nodeId: string): TreeNode[] {
-    const relationships = parseRelationships();
-    const childRelationships = relationships.filter(
-      rel => rel.relationshipType === 'CHILD' && rel.relatedNodeId === nodeId
-    );
-    
-    return childRelationships
+    const relationships = getCachedRelationships();
+    return relationships
+      .filter(rel => rel.relationshipType === 'CHILD' && rel.relatedNodeId === nodeId)
       .map(rel => getNodeById(rel.nodeId))
       .filter((node): node is TreeNode => !!node);
   }
   
   // Find sibling nodes for a node
   function getSiblingNodes(nodeId: string): TreeNode[] {
-    const relationships = parseRelationships();
-    const siblingRelationships = relationships.filter(
-      rel => rel.relationshipType === 'SIBLING' && rel.relatedNodeId === nodeId
-    );
-    
-    return siblingRelationships
+    const relationships = getCachedRelationships();
+    return relationships
+      .filter(rel => rel.relationshipType === 'SIBLING' && rel.relatedNodeId === nodeId)
       .map(rel => getNodeById(rel.nodeId))
       .filter((node): node is TreeNode => !!node);
   }
   
-  // Find a good starting node if there are nodes available
+  // Find a suitable starting node
   function findStartingNode(): string | null {
     if (nodes.length === 0) return null;
     
-    // Try to find a node that has family connections
-    for (const node of nodes) {
-      const personWithRelations = getFamilyRelationships(node.personId);
-      if (personWithRelations) {
-        return node.id;
-      }
-    }
-    
-    // Fall back to the first node if we couldn't find a better candidate
+    // Just use the first node as the starting point
+    // The tree will reorganize based on relationships
     return nodes[0].id;
+  }
+  
+  // Auto-center the tree on mount or when data changes
+  onMount(() => {
+    if (treeContainer) {
+      centerTree();
+    }
+  });
+  
+  // Center tree in the container
+  function centerTree() {
+    if (treeData.length > 0 && treeContainer) {
+      translateX = 0;
+      translateY = 0;
+      setTimeout(() => {
+        const containerWidth = treeContainer.clientWidth;
+        const containerHeight = treeContainer.clientHeight;
+        
+        // Get the vertical extent of the tree
+        let minY = Number.MAX_SAFE_INTEGER;
+        let maxY = Number.MIN_SAFE_INTEGER;
+        treeData.forEach(item => {
+          if (item.position.y < minY) {
+            minY = item.position.y;
+          }
+          if (item.position.y > maxY) {
+            maxY = item.position.y;
+          }
+        });
+        
+        translateX = containerWidth / 2;
+        
+        // Calculate vertical position to show more of the tree
+        // This places the tree further up in the viewport
+        translateY = containerHeight / 2;
+        
+        // If we have only a top portion of the tree (e.g., just parents)
+        // ensure they're visible by pushing content down
+        if (treeData.length <= 3 && maxY - minY < 300) {
+          translateY = 100; // Show at the top of the container
+        }
+      }, 100);
+    }
+  }
+  
+  // Center the tree whenever tree data changes
+  $: if (treeData.length > 0 && treeContainer) {
+    centerTree();
   }
   
   // Handle zoom in/out
@@ -240,6 +264,9 @@
     translateX = 0;
     translateY = 0;
   }
+  
+  // Format zoom level as percentage
+  $: zoomPercentage = Math.round(zoomLevel * 100);
   
   // Handle panning
   function handleMouseDown(event: MouseEvent) {
@@ -268,6 +295,7 @@
     const node = findNode(personId);
     if (node) {
       selectedNodeId = node.id;
+      selectedPersonId = personId; // Set the selectedPersonId when a node is selected
       dispatch('nodeSelect', { nodeId: node.id, personId });
     }
   }
@@ -288,17 +316,6 @@
     dispatch('editPerson', event.detail);
   }
 
-  function handleSearchParent(event: CustomEvent<{ personId: string }>) {
-    dispatch('searchParent', event.detail);
-  }
-
-  function handleSearchChild(event: CustomEvent<{ personId: string }>) {
-    dispatch('searchChild', event.detail);
-  }
-
-  function handleSearchSibling(event: CustomEvent<{ personId: string }>) {
-    dispatch('searchSibling', event.detail);
-  }
 
   function handleAddPerson() {
     dispatch('addPerson', {});
@@ -320,10 +337,10 @@
   $: connections = calculateConnections(treeData);
   
   // Constants for layout
-  const LEVEL_HEIGHT = 250; // Vertical space between levels
-  const NODE_WIDTH = 200;   // Width of a node including margin 
+  const LEVEL_HEIGHT = 180; // Vertical space between levels (reduced to fit more on screen)
+  const NODE_WIDTH = 170;   // Width of a node including margin (slightly reduced)
   const NODE_SPACING = 50;  // Additional spacing between siblings
-  const ROOT_Y = 100;       // Y position of the root node
+  const ROOT_Y = -500;       // Y position of the root node (moved down to be more visible)
   
   // Hierarchical tree layout calculation
   function calculateTreeLayout(rootId: string | null, nodes: TreeNode[], people: Person[]) {
@@ -332,42 +349,57 @@
     
     const layout: LayoutNode[] = [];
     const processedNodeIds = new Set<string>();
-    const nodeLevelMap = new Map<string, number>();
+    const nodeGenMap = new Map<string, number>();
     const nodeXPositions = new Map<number, number[]>();
     
-    // First pass - determine levels for all nodes
-    function determineNodeLevels(nodeId: string, level: number, processed = new Set<string>()) {
-      if (processed.has(nodeId)) return;
-      processed.add(nodeId);
+    // First pass - determine generation numbers for all nodes (higher generation = older)
+    function determineGenerations(nodeId: string, generation: number, visited = new Set<string>()) {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
       
-      nodeLevelMap.set(nodeId, level);
+      // Get current generation or update if the new one is higher
+      const currentGen = nodeGenMap.get(nodeId);
+      if (currentGen === undefined || generation > currentGen) {
+        nodeGenMap.set(nodeId, generation);
+      } else {
+        // If we already assigned a higher generation, use that
+        generation = currentGen;
+      }
       
-      // Process parents (one level up)
+      // Process parents (one generation higher)
       const parentNodes = getParentNodes(nodeId);
       parentNodes.forEach(parent => {
-        determineNodeLevels(parent.id, level - 1, processed);
+        determineGenerations(parent.id, generation + 1, visited);
       });
       
-      // Process children (one level down)
+      // Process children (one generation lower)
       const childNodes = getChildNodes(nodeId);
       childNodes.forEach(child => {
-        determineNodeLevels(child.id, level + 1, processed);
+        determineGenerations(child.id, Math.max(0, generation - 1), visited);
       });
       
-      // Process siblings (same level)
+      // Process siblings (same generation)
       const siblingNodes = getSiblingNodes(nodeId);
       siblingNodes.forEach(sibling => {
-        determineNodeLevels(sibling.id, level, processed);
+        determineGenerations(sibling.id, generation, visited);
       });
     }
     
-    // Start with the root node at level 0
-    determineNodeLevels(rootId, 0);
+    // Start with the root node at generation 0
+    determineGenerations(rootId, 0);
     
-    // Setup position calculation for each level
-    const levelNodesCount = new Map<number, number>();
-    nodeLevelMap.forEach((level, nodeId) => {
-      levelNodesCount.set(level, (levelNodesCount.get(level) || 0) + 1);
+    // Normalize generations so the oldest is 0
+    const highestGeneration = Math.max(...Array.from(nodeGenMap.values()));
+    
+    nodeGenMap.forEach((gen, nodeId) => {
+      // Invert the generations so oldest (highest number) becomes 0
+      nodeGenMap.set(nodeId, highestGeneration - gen);
+    });
+    
+    // Setup position calculation for each generation
+    const genNodesCount = new Map<number, number>();
+    nodeGenMap.forEach((gen, nodeId) => {
+      genNodesCount.set(gen, (genNodesCount.get(gen) || 0) + 1);
     });
     
     // Process root node first
@@ -377,30 +409,26 @@
     const rootPerson = people.find(p => p.id === rootNode.personId);
     if (!rootPerson) return layout;
     
+    const rootGeneration = nodeGenMap.get(rootId) || 0;
+    
     // Second pass - calculate positions for each node
     // First place the root node in the center
     layout.push({
       node: rootNode,
       person: rootPerson,
-      level: 0,
-      position: { x: 0, y: ROOT_Y },
+      level: rootGeneration,
+      position: { x: 0, y: ROOT_Y + rootGeneration * LEVEL_HEIGHT },
       childIds: [],
       siblingIds: []
     });
     processedNodeIds.add(rootId);
     
-    // Setup a width for each level
-    const levelWidth = new Map<number, number>();
-    levelNodesCount.forEach((count, level) => {
-      levelWidth.set(level, count * (NODE_WIDTH + NODE_SPACING));
-    });
-    
-    // Calculate positions for each level
+    // Calculate positions for each generation
     const queue: string[] = [rootId];
     
     while (queue.length > 0) {
       const nodeId = queue.shift()!;
-      const currentLevel = nodeLevelMap.get(nodeId)!;
+      const currentGen = nodeGenMap.get(nodeId)!;
       const currentLayoutNode = layout.find(item => item.node.id === nodeId);
       
       if (!currentLayoutNode) continue;
@@ -414,14 +442,14 @@
       currentLayoutNode.childIds = childNodes.map(n => n.id);
       currentLayoutNode.siblingIds = siblingNodes.map(n => n.id);
       
-      // Initialize positions for the current level if not done yet
-      if (!nodeXPositions.has(currentLevel)) {
-        nodeXPositions.set(currentLevel, []);
+      // Initialize positions for the current generation if not done yet
+      if (!nodeXPositions.has(currentGen)) {
+        nodeXPositions.set(currentGen, []);
       }
       
       // Calculate child positions - place them centered below the parent
       const childCount = childNodes.length;
-      const childLevel = currentLevel + 1;
+      const childGen = currentGen + 1; // Children are one generation below parents
       
       if (childCount > 0) {
         const totalChildWidth = childCount * (NODE_WIDTH + NODE_SPACING) - NODE_SPACING;
@@ -434,10 +462,10 @@
           if (!childPerson) return;
           
           const childX = startX + index * (NODE_WIDTH + NODE_SPACING);
-          const childY = ROOT_Y + childLevel * LEVEL_HEIGHT;
+          const childY = ROOT_Y + childGen * LEVEL_HEIGHT;
           
           // Check if position is occupied
-          const levelPositions = nodeXPositions.get(childLevel) || [];
+          const levelPositions = nodeXPositions.get(childGen) || [];
           let adjustedX = childX;
           
           // Find a free spot
@@ -450,7 +478,7 @@
           layout.push({
             node: childNode,
             person: childPerson,
-            level: childLevel,
+            level: childGen,
             position: { x: adjustedX, y: childY },
             parentId: nodeId,
             childIds: [],
@@ -459,7 +487,7 @@
           
           // Record this position
           levelPositions.push(adjustedX);
-          nodeXPositions.set(childLevel, levelPositions);
+          nodeXPositions.set(childGen, levelPositions);
           
           processedNodeIds.add(childNode.id);
           queue.push(childNode.id);
@@ -468,7 +496,7 @@
       
       // Calculate parent positions
       const parentCount = parentNodes.length;
-      const parentLevel = currentLevel - 1;
+      const parentGen = currentGen - 1; // Parents are one generation above children
       
       if (parentCount > 0) {
         const totalParentWidth = parentCount * (NODE_WIDTH + NODE_SPACING) - NODE_SPACING;
@@ -481,10 +509,10 @@
           if (!parentPerson) return;
           
           const parentX = startX + index * (NODE_WIDTH + NODE_SPACING);
-          const parentY = ROOT_Y + parentLevel * LEVEL_HEIGHT;
+          const parentY = ROOT_Y + parentGen * LEVEL_HEIGHT;
           
           // Check if position is occupied
-          const levelPositions = nodeXPositions.get(parentLevel) || [];
+          const levelPositions = nodeXPositions.get(parentGen) || [];
           let adjustedX = parentX;
           
           const occupied = levelPositions.some(x => Math.abs(x - adjustedX) < NODE_WIDTH);
@@ -496,7 +524,7 @@
           layout.push({
             node: parentNode,
             person: parentPerson,
-            level: parentLevel,
+            level: parentGen,
             position: { x: adjustedX, y: parentY },
             childIds: [nodeId],
             siblingIds: []
@@ -504,7 +532,7 @@
           
           // Record this position
           levelPositions.push(adjustedX);
-          nodeXPositions.set(parentLevel, levelPositions);
+          nodeXPositions.set(parentGen, levelPositions);
           
           processedNodeIds.add(parentNode.id);
           queue.push(parentNode.id);
@@ -512,7 +540,7 @@
       }
       
       // Calculate sibling positions
-      const siblingLevel = currentLevel;
+      const siblingGen = currentGen; // Siblings are in the same generation
       
       siblingNodes.forEach((siblingNode) => {
         if (processedNodeIds.has(siblingNode.id)) return;
@@ -520,19 +548,19 @@
         const siblingPerson = people.find(p => p.id === siblingNode.personId);
         if (!siblingPerson) return;
         
-        // Find the rightmost node at this level
-        const levelPositions = nodeXPositions.get(siblingLevel) || [];
+        // Find the rightmost node at this generation
+        const levelPositions = nodeXPositions.get(siblingGen) || [];
         const rightmostX = levelPositions.length > 0 
           ? Math.max(...levelPositions) 
           : currentLayoutNode.position.x;
         
         const siblingX = rightmostX + NODE_WIDTH + NODE_SPACING;
-        const siblingY = ROOT_Y + siblingLevel * LEVEL_HEIGHT;
+        const siblingY = ROOT_Y + siblingGen * LEVEL_HEIGHT;
         
         layout.push({
           node: siblingNode,
           person: siblingPerson,
-          level: siblingLevel,
+          level: siblingGen,
           position: { x: siblingX, y: siblingY },
           parentId: currentLayoutNode?.parentId,
           childIds: [],
@@ -541,7 +569,7 @@
         
         // Record this position
         levelPositions.push(siblingX);
-        nodeXPositions.set(siblingLevel, levelPositions);
+        nodeXPositions.set(siblingGen, levelPositions);
         
         processedNodeIds.add(siblingNode.id);
         queue.push(siblingNode.id);
@@ -608,7 +636,7 @@
 
 <div class="tree-canvas-container">
   <!-- Tree zoom controls -->
-  <div class="zoom-controls absolute top-4 right-4 flex space-x-2 bg-white p-2 rounded-md shadow-md z-10">
+  <div class="zoom-controls absolute top-4 right-4 flex items-center space-x-2 bg-white p-2 rounded-md shadow-md z-10">
     <button 
       on:click={handleZoomIn} 
       class="p-1 rounded hover:bg-gray-100" 
@@ -627,6 +655,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
       </svg>
     </button>
+    <span class="text-sm font-medium text-gray-700 mx-1">{zoomPercentage}%</span>
     <button 
       on:click={handleResetZoom} 
       class="p-1 rounded hover:bg-gray-100" 
@@ -655,8 +684,8 @@
         <!-- Tree Structure with hierarchical layout -->
         <div class="relative min-h-[600px] min-w-[800px]">
           <!-- Draw connection lines first so they appear behind the nodes -->
-          {#each connections as connection}
-            <svg class="absolute line-container" style="pointer-events: none; overflow: visible; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+          <svg class="absolute line-container" style="pointer-events: none; overflow: visible; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+            {#each connections as connection}
               <path
                 class="connection-line {connection.type}"
                 d={connection.type === 'parent-child'
@@ -671,8 +700,8 @@
                 stroke-width={connection.type === 'parent-child' ? 2 : 1.5}
                 fill="none"
               />
-            </svg>
-          {/each}
+            {/each}
+          </svg>
           
           <!-- Draw each node -->
           {#each treeData as item}
@@ -686,9 +715,6 @@
                 on:addChild={handleAddChild}
                 on:addSibling={handleAddSibling}
                 on:edit={handleEditPerson}
-                on:searchParent={handleSearchParent}
-                on:searchChild={handleSearchChild}
-                on:searchSibling={handleSearchSibling}
               />
             </div>
           {/each}
@@ -713,6 +739,138 @@
         </div>
       {/if}
     </div>
+  </div>
+  
+  <!-- Sliding side panel for person details -->
+  <div 
+    class="side-panel fixed right-0 top-0 h-full bg-white shadow-lg z-20 transform transition-transform duration-300 ease-in-out"
+    class:slide-in={selectedNodeId}
+    class:slide-out={!selectedNodeId}
+    style="width: 400px; {selectedNodeId ? '' : 'transform: translateX(100%)'}"
+  >
+    {#if selectedNodeId && selectedPersonId && findPerson(selectedPersonId)}
+      <div class="h-full flex flex-col overflow-hidden">
+        <!-- Panel header -->
+        <div class="bg-gray-100 p-4 flex justify-between items-center border-b">
+          <h2 class="text-lg font-semibold">Person Details</h2>
+          <button 
+            on:click={() => { selectedNodeId = null; selectedPersonId = null; }}
+            class="text-gray-500 hover:text-gray-700"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Person details -->
+        <div class="p-4 flex-grow overflow-y-auto">
+          <div class="flex items-center mb-6">
+            <img 
+              src={getPrimaryMedia(selectedPersonId)?.url || (findPerson(selectedPersonId).gender === 'female' ? '/src/images/default-female.svg' : '/src/images/default-male.svg')} 
+              alt={findPerson(selectedPersonId).firstName}
+              class="w-20 h-20 rounded-full object-cover border-2 border-gray-300 mr-4"
+            />
+            <div>
+              <h3 class="text-xl font-semibold">{findPerson(selectedPersonId).firstName} {findPerson(selectedPersonId).lastName || ''}</h3>
+              {#if findPerson(selectedPersonId).birthDate || findPerson(selectedPersonId).deathDate}
+                <p class="text-gray-600">
+                  {findPerson(selectedPersonId).birthDate ? new Date(findPerson(selectedPersonId).birthDate).getFullYear() : '?'} - 
+                  {findPerson(selectedPersonId).deathDate ? new Date(findPerson(selectedPersonId).deathDate).getFullYear() : 'Present'}
+                </p>
+              {/if}
+              <p class="text-gray-600 capitalize">{findPerson(selectedPersonId).gender || 'Unknown'}</p>
+            </div>
+          </div>
+          
+          <!-- Add relationship buttons -->
+          <div class="grid grid-cols-3 gap-2 mb-6">
+            <button 
+              on:click={() => dispatch('addParent', { personId: selectedPersonId })}
+              class="py-2 px-3 bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
+            >
+              Add Parent
+            </button>
+            <button 
+              on:click={() => dispatch('addChild', { personId: selectedPersonId })}
+              class="py-2 px-3 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
+            >
+              Add Child
+            </button>
+            <button 
+              on:click={() => dispatch('addSibling', { personId: selectedPersonId })}
+              class="py-2 px-3 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 transition-colors"
+            >
+              Add Sibling
+            </button>
+          </div>
+          
+          <!-- Edit person button -->
+          <button 
+            on:click={() => dispatch('editPerson', { personId: selectedPersonId })}
+            class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors mb-6"
+          >
+            Edit Person
+          </button>
+          
+          <!-- Show family relationships -->
+          <div class="mt-6">
+            <h3 class="text-lg font-semibold mb-3">Family Relationships</h3>
+            
+            {#if familyRelationshipsCache.has(selectedPersonId)}
+              {@const familyData = familyRelationshipsCache.get(selectedPersonId)}
+              
+              {#if familyData.parents && familyData.parents.length > 0}
+                <div class="mb-4">
+                  <h4 class="font-medium text-gray-700 mb-2">Parents</h4>
+                  <ul class="space-y-1">
+                    {#each familyData.parents as parent}
+                      <li class="p-2 bg-gray-50 rounded flex justify-between items-center">
+                        <span>{parent.firstName} {parent.lastName || ''}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+              
+              {#if familyData.siblings && familyData.siblings.length > 0}
+                <div class="mb-4">
+                  <h4 class="font-medium text-gray-700 mb-2">Siblings</h4>
+                  <ul class="space-y-1">
+                    {#each familyData.siblings as sibling}
+                      <li class="p-2 bg-gray-50 rounded flex justify-between items-center">
+                        <span>{sibling.firstName} {sibling.lastName || ''}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+              
+              {#if familyData.children && familyData.children.length > 0}
+                <div>
+                  <h4 class="font-medium text-gray-700 mb-2">Children</h4>
+                  <ul class="space-y-1">
+                    {#each familyData.children as child}
+                      <li class="p-2 bg-gray-50 rounded flex justify-between items-center">
+                        <span>{child.firstName} {child.lastName || ''}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+              
+              {#if (!familyData.parents || familyData.parents.length === 0) && 
+                   (!familyData.siblings || familyData.siblings.length === 0) && 
+                   (!familyData.children || familyData.children.length === 0)}
+                <p class="text-gray-500 italic">No family relationships found</p>
+              {/if}
+            {:else}
+              <p class="text-gray-500 italic">Loading family data...</p>
+            {/if}
+          </div>
+        </div>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -740,5 +898,28 @@
   
   .connection-line.sibling {
     stroke-dasharray: 5, 3; /* Dashed line for siblings */
+  }
+  
+  /* Sliding panel styles */
+  .side-panel {
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  }
+  
+  .slide-in {
+    animation: slideIn 0.3s forwards;
+  }
+  
+  .slide-out {
+    animation: slideOut 0.3s forwards;
+  }
+  
+  @keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  
+  @keyframes slideOut {
+    from { transform: translateX(0); }
+    to { transform: translateX(100%); }
   }
 </style>
