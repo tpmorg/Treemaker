@@ -14,6 +14,9 @@
     addChild: { personId: string };
     addSibling: { personId: string };
     edit: { personId: string };
+    searchParent: { personId: string };
+    searchChild: { personId: string };
+    searchSibling: { personId: string };
   }>();
   
   // Format birth/death dates for display
@@ -49,6 +52,19 @@
   
   function handleEdit() {
     dispatch('edit', { personId: person.id });
+  }
+  
+  // Handle relationship search
+  function handleSearchParent() {
+    dispatch('searchParent', { personId: person.id });
+  }
+  
+  function handleSearchChild() {
+    dispatch('searchChild', { personId: person.id });
+  }
+  
+  function handleSearchSibling() {
+    dispatch('searchSibling', { personId: person.id });
   }
 </script>
 
@@ -92,24 +108,51 @@
   <!-- Action Buttons - Only shown when selected -->
   {#if isSelected}
     <div class="action-buttons flex flex-wrap justify-center gap-1 mt-3">
-      <button 
-        on:click|stopPropagation={handleAddParent}
-        class="text-xs py-1 px-2 bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
-        title="Add Parent">
-        + Parent
-      </button>
-      <button 
-        on:click|stopPropagation={handleAddSibling}
-        class="text-xs py-1 px-2 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 transition-colors"
-        title="Add Sibling">
-        + Sibling
-      </button>
-      <button 
-        on:click|stopPropagation={handleAddChild}
-        class="text-xs py-1 px-2 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
-        title="Add Child">
-        + Child
-      </button>
+      <div class="flex gap-1 w-full justify-center mb-1">
+        <button 
+          on:click|stopPropagation={handleAddParent}
+          class="text-xs py-1 px-2 bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
+          title="Add New Parent">
+          + Parent
+        </button>
+        <button 
+          on:click|stopPropagation={handleSearchParent}
+          class="text-xs py-1 px-2 bg-green-50 text-green-800 rounded hover:bg-green-200 transition-colors"
+          title="Find Existing Parent">
+          🔍 Parent
+        </button>
+      </div>
+      
+      <div class="flex gap-1 w-full justify-center mb-1">
+        <button 
+          on:click|stopPropagation={handleAddSibling}
+          class="text-xs py-1 px-2 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 transition-colors"
+          title="Add New Sibling">
+          + Sibling
+        </button>
+        <button 
+          on:click|stopPropagation={handleSearchSibling}
+          class="text-xs py-1 px-2 bg-purple-50 text-purple-800 rounded hover:bg-purple-200 transition-colors"
+          title="Find Existing Sibling">
+          🔍 Sibling
+        </button>
+      </div>
+      
+      <div class="flex gap-1 w-full justify-center mb-1">
+        <button 
+          on:click|stopPropagation={handleAddChild}
+          class="text-xs py-1 px-2 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
+          title="Add New Child">
+          + Child
+        </button>
+        <button 
+          on:click|stopPropagation={handleSearchChild}
+          class="text-xs py-1 px-2 bg-blue-50 text-blue-800 rounded hover:bg-blue-200 transition-colors"
+          title="Find Existing Child">
+          🔍 Child
+        </button>
+      </div>
+      
       <button 
         on:click|stopPropagation={handleEdit}
         class="text-xs py-1 px-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors"

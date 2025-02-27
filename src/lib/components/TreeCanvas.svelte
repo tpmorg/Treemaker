@@ -9,12 +9,10 @@
   export let people: Person[] = [];
   export let nodes: TreeNode[] = [];
   export let media: Media[] = [];
-  export let rootNodeId: string | null = null;
   
   // State
   let treeContainer: HTMLDivElement;
   let zoomLevel = 1;
-  let showAddRootPersonModal = false;
   let selectedNodeId: string | null = null;
   let isPanning = false;
   let startPanX = 0;
@@ -29,7 +27,10 @@
     addChild: { personId: string };
     addSibling: { personId: string };
     editPerson: { personId: string };
-    addRootPerson: { personId?: string };
+    addPerson: {};
+    searchParent: { personId: string };
+    searchChild: { personId: string };
+    searchSibling: { personId: string };
   }>();
   
   // Helper functions
@@ -58,30 +59,119 @@
     relationshipType: string;
   }
 
-  // Parse relationship data from nodes
-  function parseRelationships(): NodeRelationship[] {
+  // Get family relationship data from the API
+  async function getFamilyRelationships(personId: string): Promise<any> {
+    try {
+      const response = await fetch(`/api/people/family?personId=${personId}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        return result.person;
+      }
+      
+      console.error('Error fetching family relationships:', result.error);
+      return null;
+    } catch (error) {
+      console.error('Error in getFamilyRelationships:', error);
+      return null;
+    }
+  }
+  
+  // Map for storing cached family relationships
+  const familyRelationshipsCache = new Map<string, any>();
+  
+  // Synchronous version that returns cached data for the layout algorithm
+  function getCachedRelationships(): NodeRelationship[] {
     const relationships: NodeRelationship[] = [];
     
-    // Assuming each node with type PARENT, CHILD, or SIBLING has a position field
-    // that contains a relatedToNodeId property
+    // Use only the relationships that we've already fetched
     nodes.forEach(node => {
-      if (node.type === 'PARENT' || node.type === 'CHILD' || node.type === 'SIBLING') {
-        try {
-          const position = node.position ? JSON.parse(node.position) : null;
-          if (position && position.relatedToNodeId) {
+      const personId = node.personId;
+      const cachedData = familyRelationshipsCache.get(personId);
+      
+      if (!cachedData) return;
+      
+      // Add parent-child relationships
+      if (cachedData.parents) {
+        cachedData.parents.forEach((parent: any) => {
+          const parentNode = findNode(parent.id);
+          if (parentNode) {
             relationships.push({
-              nodeId: node.id,
-              relatedNodeId: position.relatedToNodeId,
-              relationshipType: node.type
+              nodeId: parentNode.id,
+              relatedNodeId: node.id,
+              relationshipType: 'PARENT'
             });
           }
-        } catch (e) {
-          console.error("Failed to parse position for node", node.id, e);
-        }
+        });
+      }
+      
+      // Add child-parent relationships
+      if (cachedData.children) {
+        cachedData.children.forEach((child: any) => {
+          const childNode = findNode(child.id);
+          if (childNode) {
+            relationships.push({
+              nodeId: node.id,
+              relatedNodeId: childNode.id,
+              relationshipType: 'CHILD'
+            });
+          }
+        });
+      }
+      
+      // Add sibling relationships
+      if (cachedData.siblings) {
+        cachedData.siblings.forEach((sibling: any) => {
+          const siblingNode = findNode(sibling.id);
+          if (siblingNode) {
+            relationships.push({
+              nodeId: node.id,
+              relatedNodeId: siblingNode.id,
+              relationshipType: 'SIBLING'
+            });
+          }
+        });
       }
     });
     
     return relationships;
+  }
+  
+  // Async function to fetch and populate the cache
+  async function loadAllFamilyRelationships() {
+    // Fetch relationships for each person and cache them
+    const fetchPromises = nodes.map(async node => {
+      const personId = node.personId;
+      
+      // Skip if already in cache
+      if (familyRelationshipsCache.has(personId)) return;
+      
+      try {
+        const data = await getFamilyRelationships(personId);
+        if (data) {
+          familyRelationshipsCache.set(personId, data);
+        }
+      } catch (error) {
+        console.error(`Error fetching relationships for person ${personId}:`, error);
+      }
+    });
+    
+    await Promise.all(fetchPromises);
+    
+    // Force a reactive update after loading all data
+    treeData = calculateTreeLayout(startingNodeId, nodes, people);
+  }
+  
+  // Trigger loading relationships when nodes or people change
+  $: {
+    if (nodes.length > 0 && people.length > 0) {
+      loadAllFamilyRelationships();
+    }
+  }
+  
+  // Parse relationship data using the cache
+  function parseRelationships(): NodeRelationship[] {
+    return getCachedRelationships();
   }
   
   // Find parent nodes for a node
@@ -120,12 +210,20 @@
       .filter((node): node is TreeNode => !!node);
   }
   
-  // Determine initial root node if not provided
-  $: {
-    if (nodes.length > 0 && !rootNodeId) {
-      // Default to the first node if no root is specified
-      rootNodeId = nodes[0].id;
+  // Find a good starting node if there are nodes available
+  function findStartingNode(): string | null {
+    if (nodes.length === 0) return null;
+    
+    // Try to find a node that has family connections
+    for (const node of nodes) {
+      const personWithRelations = getFamilyRelationships(node.personId);
+      if (personWithRelations) {
+        return node.id;
+      }
     }
+    
+    // Fall back to the first node if we couldn't find a better candidate
+    return nodes[0].id;
   }
   
   // Handle zoom in/out
@@ -190,8 +288,20 @@
     dispatch('editPerson', event.detail);
   }
 
-  function handleAddRootPerson() {
-    dispatch('addRootPerson', {});
+  function handleSearchParent(event: CustomEvent<{ personId: string }>) {
+    dispatch('searchParent', event.detail);
+  }
+
+  function handleSearchChild(event: CustomEvent<{ personId: string }>) {
+    dispatch('searchChild', event.detail);
+  }
+
+  function handleSearchSibling(event: CustomEvent<{ personId: string }>) {
+    dispatch('searchSibling', event.detail);
+  }
+
+  function handleAddPerson() {
+    dispatch('addPerson', {});
   }
   
   interface LayoutNode {
@@ -205,12 +315,14 @@
   }
   
   // Calculate tree nodes for rendering
-  $: treeData = calculateTreeLayout(rootNodeId, nodes, people);
+  $: startingNodeId = findStartingNode();
+  $: treeData = calculateTreeLayout(startingNodeId, nodes, people);
   $: connections = calculateConnections(treeData);
   
   // Constants for layout
-  const LEVEL_HEIGHT = 150; // Vertical space between levels
-  const NODE_WIDTH = 150;   // Width of a node including margin
+  const LEVEL_HEIGHT = 250; // Vertical space between levels
+  const NODE_WIDTH = 200;   // Width of a node including margin 
+  const NODE_SPACING = 50;  // Additional spacing between siblings
   const ROOT_Y = 100;       // Y position of the root node
   
   // Hierarchical tree layout calculation
@@ -220,6 +332,43 @@
     
     const layout: LayoutNode[] = [];
     const processedNodeIds = new Set<string>();
+    const nodeLevelMap = new Map<string, number>();
+    const nodeXPositions = new Map<number, number[]>();
+    
+    // First pass - determine levels for all nodes
+    function determineNodeLevels(nodeId: string, level: number, processed = new Set<string>()) {
+      if (processed.has(nodeId)) return;
+      processed.add(nodeId);
+      
+      nodeLevelMap.set(nodeId, level);
+      
+      // Process parents (one level up)
+      const parentNodes = getParentNodes(nodeId);
+      parentNodes.forEach(parent => {
+        determineNodeLevels(parent.id, level - 1, processed);
+      });
+      
+      // Process children (one level down)
+      const childNodes = getChildNodes(nodeId);
+      childNodes.forEach(child => {
+        determineNodeLevels(child.id, level + 1, processed);
+      });
+      
+      // Process siblings (same level)
+      const siblingNodes = getSiblingNodes(nodeId);
+      siblingNodes.forEach(sibling => {
+        determineNodeLevels(sibling.id, level, processed);
+      });
+    }
+    
+    // Start with the root node at level 0
+    determineNodeLevels(rootId, 0);
+    
+    // Setup position calculation for each level
+    const levelNodesCount = new Map<number, number>();
+    nodeLevelMap.forEach((level, nodeId) => {
+      levelNodesCount.set(level, (levelNodesCount.get(level) || 0) + 1);
+    });
     
     // Process root node first
     const rootNode = nodes.find(n => n.id === rootId);
@@ -228,7 +377,8 @@
     const rootPerson = people.find(p => p.id === rootNode.personId);
     if (!rootPerson) return layout;
     
-    // Add root to layout
+    // Second pass - calculate positions for each node
+    // First place the root node in the center
     layout.push({
       node: rootNode,
       person: rootPerson,
@@ -239,122 +389,162 @@
     });
     processedNodeIds.add(rootId);
     
-    // Queue for breadth-first traversal
-    const queue: { nodeId: string; level: number; parentX: number; index: number }[] = [
-      { nodeId: rootId, level: 0, parentX: 0, index: 0 }
-    ];
+    // Setup a width for each level
+    const levelWidth = new Map<number, number>();
+    levelNodesCount.forEach((count, level) => {
+      levelWidth.set(level, count * (NODE_WIDTH + NODE_SPACING));
+    });
+    
+    // Calculate positions for each level
+    const queue: string[] = [rootId];
     
     while (queue.length > 0) {
-      const { nodeId, level, parentX, index } = queue.shift()!;
+      const nodeId = queue.shift()!;
+      const currentLevel = nodeLevelMap.get(nodeId)!;
+      const currentLayoutNode = layout.find(item => item.node.id === nodeId);
       
-      // Get children, parents, and siblings
+      if (!currentLayoutNode) continue;
+      
+      // Get related nodes
       const childNodes = getChildNodes(nodeId);
       const parentNodes = getParentNodes(nodeId);
       const siblingNodes = getSiblingNodes(nodeId);
       
-      // Update the current node with child and sibling IDs
-      const currentLayoutNode = layout.find(item => item.node.id === nodeId);
-      if (currentLayoutNode) {
-        currentLayoutNode.childIds = childNodes.map(n => n.id);
-        currentLayoutNode.siblingIds = siblingNodes.map(n => n.id);
+      // Update relations in current node
+      currentLayoutNode.childIds = childNodes.map(n => n.id);
+      currentLayoutNode.siblingIds = siblingNodes.map(n => n.id);
+      
+      // Initialize positions for the current level if not done yet
+      if (!nodeXPositions.has(currentLevel)) {
+        nodeXPositions.set(currentLevel, []);
       }
       
-      // Process children
+      // Calculate child positions - place them centered below the parent
       const childCount = childNodes.length;
-      childNodes.forEach((childNode, childIndex) => {
-        if (processedNodeIds.has(childNode.id)) return;
-        
-        const childPerson = people.find(p => p.id === childNode.personId);
-        if (!childPerson) return;
-        
-        // Calculate child position:
-        // - x: Start from parent's x, offset by child index, center the group
-        // - y: Increase y based on level
-        const childX = parentX + (childIndex - (childCount - 1) / 2) * NODE_WIDTH;
-        const childY = ROOT_Y + (level + 1) * LEVEL_HEIGHT;
-        
-        layout.push({
-          node: childNode,
-          person: childPerson,
-          level: level + 1,
-          position: { x: childX, y: childY },
-          parentId: nodeId,
-          childIds: [],
-          siblingIds: []
-        });
-        
-        processedNodeIds.add(childNode.id);
-        queue.push({
-          nodeId: childNode.id,
-          level: level + 1,
-          parentX: childX,
-          index: childIndex
-        });
-      });
+      const childLevel = currentLevel + 1;
       
-      // Process parents (if we're not at the root)
-      if (level > 0) {
-        parentNodes.forEach((parentNode, parentIndex) => {
+      if (childCount > 0) {
+        const totalChildWidth = childCount * (NODE_WIDTH + NODE_SPACING) - NODE_SPACING;
+        const startX = currentLayoutNode.position.x - totalChildWidth / 2 + NODE_WIDTH / 2;
+        
+        childNodes.forEach((childNode, index) => {
+          if (processedNodeIds.has(childNode.id)) return;
+          
+          const childPerson = people.find(p => p.id === childNode.personId);
+          if (!childPerson) return;
+          
+          const childX = startX + index * (NODE_WIDTH + NODE_SPACING);
+          const childY = ROOT_Y + childLevel * LEVEL_HEIGHT;
+          
+          // Check if position is occupied
+          const levelPositions = nodeXPositions.get(childLevel) || [];
+          let adjustedX = childX;
+          
+          // Find a free spot
+          const occupied = levelPositions.some(x => Math.abs(x - adjustedX) < NODE_WIDTH);
+          if (occupied) {
+            // Move to the right until we find a free spot
+            adjustedX = Math.max(...levelPositions) + NODE_WIDTH + NODE_SPACING;
+          }
+          
+          layout.push({
+            node: childNode,
+            person: childPerson,
+            level: childLevel,
+            position: { x: adjustedX, y: childY },
+            parentId: nodeId,
+            childIds: [],
+            siblingIds: []
+          });
+          
+          // Record this position
+          levelPositions.push(adjustedX);
+          nodeXPositions.set(childLevel, levelPositions);
+          
+          processedNodeIds.add(childNode.id);
+          queue.push(childNode.id);
+        });
+      }
+      
+      // Calculate parent positions
+      const parentCount = parentNodes.length;
+      const parentLevel = currentLevel - 1;
+      
+      if (parentCount > 0) {
+        const totalParentWidth = parentCount * (NODE_WIDTH + NODE_SPACING) - NODE_SPACING;
+        const startX = currentLayoutNode.position.x - totalParentWidth / 2 + NODE_WIDTH / 2;
+        
+        parentNodes.forEach((parentNode, index) => {
           if (processedNodeIds.has(parentNode.id)) return;
           
           const parentPerson = people.find(p => p.id === parentNode.personId);
           if (!parentPerson) return;
           
-          // Calculate parent position:
-          // - x: Similar to child, but above
-          // - y: Decrease y based on level
-          const newParentX = parentX - NODE_WIDTH + parentIndex * NODE_WIDTH;
-          const parentY = ROOT_Y + (level - 1) * LEVEL_HEIGHT;
+          const parentX = startX + index * (NODE_WIDTH + NODE_SPACING);
+          const parentY = ROOT_Y + parentLevel * LEVEL_HEIGHT;
+          
+          // Check if position is occupied
+          const levelPositions = nodeXPositions.get(parentLevel) || [];
+          let adjustedX = parentX;
+          
+          const occupied = levelPositions.some(x => Math.abs(x - adjustedX) < NODE_WIDTH);
+          if (occupied) {
+            // Move to the right until we find a free spot
+            adjustedX = Math.max(...levelPositions) + NODE_WIDTH + NODE_SPACING;
+          }
           
           layout.push({
             node: parentNode,
             person: parentPerson,
-            level: level - 1,
-            position: { x: newParentX, y: parentY },
+            level: parentLevel,
+            position: { x: adjustedX, y: parentY },
             childIds: [nodeId],
             siblingIds: []
           });
           
+          // Record this position
+          levelPositions.push(adjustedX);
+          nodeXPositions.set(parentLevel, levelPositions);
+          
           processedNodeIds.add(parentNode.id);
-          queue.push({
-            nodeId: parentNode.id,
-            level: level - 1,
-            parentX: newParentX,
-            index: parentIndex
-          });
+          queue.push(parentNode.id);
         });
       }
       
-      // Process siblings
-      siblingNodes.forEach((siblingNode, siblingIndex) => {
+      // Calculate sibling positions
+      const siblingLevel = currentLevel;
+      
+      siblingNodes.forEach((siblingNode) => {
         if (processedNodeIds.has(siblingNode.id)) return;
         
         const siblingPerson = people.find(p => p.id === siblingNode.personId);
         if (!siblingPerson) return;
         
-        // Calculate sibling position:
-        // - x: To the right of the current node
-        // - y: Same level
-        const siblingX = parentX + (index + siblingIndex + 1) * NODE_WIDTH;
-        const siblingY = ROOT_Y + level * LEVEL_HEIGHT;
+        // Find the rightmost node at this level
+        const levelPositions = nodeXPositions.get(siblingLevel) || [];
+        const rightmostX = levelPositions.length > 0 
+          ? Math.max(...levelPositions) 
+          : currentLayoutNode.position.x;
+        
+        const siblingX = rightmostX + NODE_WIDTH + NODE_SPACING;
+        const siblingY = ROOT_Y + siblingLevel * LEVEL_HEIGHT;
         
         layout.push({
           node: siblingNode,
           person: siblingPerson,
-          level,
+          level: siblingLevel,
           position: { x: siblingX, y: siblingY },
           parentId: currentLayoutNode?.parentId,
           childIds: [],
           siblingIds: []
         });
         
+        // Record this position
+        levelPositions.push(siblingX);
+        nodeXPositions.set(siblingLevel, levelPositions);
+        
         processedNodeIds.add(siblingNode.id);
-        queue.push({
-          nodeId: siblingNode.id,
-          level,
-          parentX: siblingX,
-          index: index + siblingIndex + 1
-        });
+        queue.push(siblingNode.id);
       });
     }
     
@@ -376,8 +566,14 @@
         const childNode = layoutData.find(n => n.node.id === childId);
         if (childNode) {
           connections.push({
-            from: item.position,
-            to: childNode.position,
+            from: { 
+              x: item.position.x + NODE_WIDTH / 2, 
+              y: item.position.y + NODE_WIDTH / 2 
+            },
+            to: { 
+              x: childNode.position.x + NODE_WIDTH / 2, 
+              y: childNode.position.y - NODE_WIDTH / 2 
+            },
             type: 'parent-child'
           });
         }
@@ -391,8 +587,14 @@
           // to avoid duplicate connections
           if (item.position.x < siblingNode.position.x) {
             connections.push({
-              from: item.position,
-              to: siblingNode.position,
+              from: { 
+                x: item.position.x + NODE_WIDTH, 
+                y: item.position.y 
+              },
+              to: { 
+                x: siblingNode.position.x, 
+                y: siblingNode.position.y 
+              },
               type: 'sibling'
             });
           }
@@ -454,29 +656,22 @@
         <div class="relative min-h-[600px] min-w-[800px]">
           <!-- Draw connection lines first so they appear behind the nodes -->
           {#each connections as connection}
-            <div class="absolute"
-                 style="
-                   left: {(connection.from.x + connection.to.x) / 2}px;
-                   top: {(connection.from.y + connection.to.y) / 2}px;
-                   width: {Math.sqrt(
-                     Math.pow(connection.to.x - connection.from.x, 2) +
-                     Math.pow(connection.to.y - connection.from.y, 2)
-                   )}px;
-                   height: {connection.type === 'parent-child' ? LEVEL_HEIGHT : 2}px;
-                   transform: translate(-50%, -50%) rotate({Math.atan2(
-                     connection.to.y - connection.from.y,
-                     connection.to.x - connection.from.x
-                   ) * (180/Math.PI)}deg);
-                   transform-origin: center;
-                 ">
-              <div class="line {connection.type}"
-                   style="
-                     width: 100%;
-                     height: 100%;
-                     background-color: #718096;
-                   ">
-              </div>
-            </div>
+            <svg class="absolute line-container" style="pointer-events: none; overflow: visible; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+              <path
+                class="connection-line {connection.type}"
+                d={connection.type === 'parent-child'
+                  ? `M ${connection.from.x} ${connection.from.y} 
+                     C ${connection.from.x} ${(connection.from.y + connection.to.y) / 2},
+                       ${connection.to.x} ${(connection.from.y + connection.to.y) / 2},
+                       ${connection.to.x} ${connection.to.y}`
+                  : `M ${connection.from.x} ${connection.from.y} 
+                     L ${connection.to.x} ${connection.to.y}`
+                }
+                stroke={connection.type === 'parent-child' ? "#4A5568" : "#718096"}
+                stroke-width={connection.type === 'parent-child' ? 2 : 1.5}
+                fill="none"
+              />
+            </svg>
           {/each}
           
           <!-- Draw each node -->
@@ -491,65 +686,29 @@
                 on:addChild={handleAddChild}
                 on:addSibling={handleAddSibling}
                 on:edit={handleEditPerson}
+                on:searchParent={handleSearchParent}
+                on:searchChild={handleSearchChild}
+                on:searchSibling={handleSearchSibling}
               />
             </div>
           {/each}
         </div>
-      {:else if people.length > 0}
-        <!-- Fallback when no tree structure is defined but people exist -->
-        <div class="flex flex-col items-center justify-center p-8 min-h-[400px]">
-          <div class="text-center mb-8">
-            <h3 class="text-xl font-semibold text-gray-800 mb-2">No tree structure defined yet</h3>
-            <p class="text-md text-gray-600">Select a person below to make them the root of your tree.</p>
-          </div>
-          
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
-            {#each people.slice(0, 8) as person (person.id)}
-              <div 
-                on:click={() => {
-                  const node = findNode(person.id);
-                  if (node) {
-                    selectedNodeId = node.id;
-                    rootNodeId = node.id;
-                    dispatch('nodeSelect', { nodeId: node.id, personId: person.id });
-                  } else {
-                    // If no node exists for this person, create one as root
-                    dispatch('addRootPerson', { personId: person.id });
-                  }
-                }}
-                class="cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-md"
-              >
-                <EnhancedTreeNode
-                  {person}
-                  primaryMedia={getPrimaryMedia(person.id)}
-                  isSelected={false}
-                />
-              </div>
-            {/each}
-            
-            {#if people.length > 8}
-              <div class="flex items-center justify-center p-4 text-gray-500">
-                <span>+ {people.length - 8} more</span>
-              </div>
-            {/if}
-          </div>
-        </div>
       {:else}
-        <!-- No data state -->
+        <!-- No tree data state -->
         <div class="flex flex-col items-center justify-center h-full p-8 text-center">
           <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
           </svg>
-          <h3 class="text-lg font-medium text-gray-900 mb-2">No People Added Yet</h3>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">No Family Tree Data</h3>
           <p class="text-gray-600 mb-6">
-            Start by adding people to your family tree.
+            Start by adding people to your family tree and establishing relationships.
           </p>
           
           <button 
-            on:click={handleAddRootPerson}
+            on:click={handleAddPerson}
             class="py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
           >
-            Add Root Person
+            Add Person
           </button>
         </div>
       {/if}
@@ -571,17 +730,15 @@
     cursor: grabbing;
   }
   
-  .line {
-    position: absolute;
-    border-radius: 0;
+  .connection-line {
+    pointer-events: none;
   }
   
-  .line.parent-child {
-    background-color: #4a5568; /* Darker gray for parent-child */
+  .connection-line.parent-child {
+    stroke-dasharray: none;
   }
   
-  .line.sibling {
-    background-color: #718096; /* Medium gray for siblings */
-    height: 2px !important; /* Override the inline style to ensure thin lines */
+  .connection-line.sibling {
+    stroke-dasharray: 5, 3; /* Dashed line for siblings */
   }
 </style>

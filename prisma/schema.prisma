@@ -14,10 +14,10 @@ model User {
   email_verified Int       @default(0)
   totp_key       Bytes?
   recovery_code  Bytes
-  auth_session   Session[]
   key            Key[]
-  trees          Tree[]
   person         Person?
+  auth_session   Session[]
+  trees          Tree[]
 }
 
 model Session {
@@ -41,73 +41,110 @@ model Key {
 }
 
 model Tree {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  nodes       Node[]
-  people      Person[]
-  layouts     Layout[]
-  owner       User     @relation(fields: [ownerId], references: [id])
-  ownerId     String
+  id              String           @id @default(cuid())
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  ownerId         String
+  familyRelations FamilyRelation[]
+  layouts         Layout[]
+  nodes           Node[]
+  people          Person[]
+  relationships   Relationship[]
+  owner           User             @relation(fields: [ownerId], references: [id])
 }
 
 model Person {
-  id        String    @id @default(cuid())
-  firstName String
-  lastName  String?
-  birthDate DateTime?
-  deathDate DateTime?
-  gender    String?
-  notes     String?
-  tree      Tree      @relation(fields: [treeId], references: [id])
-  treeId    String
-  nodes     Node[]    @relation("PersonToNode")
-  media     Media[]
-  user      User?     @relation(fields: [userId], references: [id])
-  userId    String?   @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                String           @id @default(cuid())
+  firstName         String
+  lastName          String?
+  birthDate         DateTime?
+  deathDate         DateTime?
+  gender            String?
+  notes             String?
+  treeId            String
+  userId            String?          @unique
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  childrenToParents FamilyRelation[] @relation("PersonToChild")
+  parentsToChildren FamilyRelation[] @relation("PersonToParent")
+  media             Media[]
+  nodes             Node[]           @relation("PersonToNode")
+  user              User?            @relation(fields: [userId], references: [id])
+  tree              Tree             @relation(fields: [treeId], references: [id])
+  relationshipsTo   Relationship[]   @relation("ToRelation")
+  relationshipsFrom Relationship[]   @relation("FromRelation")
 }
 
 model Node {
   id        String   @id @default(cuid())
-  type      String // e.g., "PARENT", "SPOUSE", "CHILD"
-  person    Person   @relation("PersonToNode", fields: [personId], references: [id])
   personId  String
-  relatedTo Node[]   @relation("NodeToNode")
-  relatedBy Node[]   @relation("NodeToNode")
-  tree      Tree     @relation(fields: [treeId], references: [id])
   treeId    String
-  position  String? // Stores x,y coordinates for visual layout as JSON string
+  x         Float?
+  y         Float?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tree      Tree     @relation(fields: [treeId], references: [id])
+  person    Person   @relation("PersonToNode", fields: [personId], references: [id])
 }
 
 model Media {
   id          String   @id @default(cuid())
   url         String
-  type        String // e.g., "IMAGE", "DOCUMENT", "VIDEO"
+  type        String
   title       String?
   description String?
-  person      Person   @relation(fields: [personId], references: [id])
   personId    String
-  layout      Layout?  @relation(fields: [layoutId], references: [id])
   layoutId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  layout      Layout?  @relation(fields: [layoutId], references: [id])
+  person      Person   @relation(fields: [personId], references: [id])
 }
 
 model Layout {
   id        String   @id @default(cuid())
   name      String
-  type      String // e.g., "TREE", "TIMELINE", "GALLERY"
-  config    String // Stores layout-specific configuration as JSON string
+  type      String
+  config    String
   isDefault Boolean  @default(false)
-  tree      Tree     @relation(fields: [treeId], references: [id])
   treeId    String
-  media     Media[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tree      Tree     @relation(fields: [treeId], references: [id])
+  media     Media[]
+}
+
+model FamilyRelation {
+  id           String   @id @default(cuid())
+  parentId     String
+  childId      String
+  relationType String
+  treeId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tree         Tree     @relation(fields: [treeId], references: [id])
+  child        Person   @relation("PersonToChild", fields: [childId], references: [id])
+  parent       Person   @relation("PersonToParent", fields: [parentId], references: [id])
+
+  @@unique([parentId, childId, relationType])
+}
+
+model Relationship {
+  id           String    @id @default(cuid())
+  fromPersonId String
+  toPersonId   String
+  type         String
+  subtype      String?
+  startDate    DateTime?
+  endDate      DateTime?
+  treeId       String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  tree         Tree      @relation(fields: [treeId], references: [id])
+  toPerson     Person    @relation("ToRelation", fields: [toPersonId], references: [id])
+  fromPerson   Person    @relation("FromRelation", fields: [fromPersonId], references: [id])
+
+  @@unique([fromPersonId, toPersonId, type, subtype])
 }

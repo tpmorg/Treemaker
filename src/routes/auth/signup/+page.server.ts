@@ -1,14 +1,15 @@
 import { auth } from '$lib/server/lucia';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { userService } from '../../services/userservice';
+import { userService } from '$lib/server/userservice';
+import { sanitizeUserForClient } from '$lib/utils/userUtils';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (locals.user) {
     throw redirect(302, '/');
   }
   return {
-    user: locals.user
+    user: sanitizeUserForClient(locals.user)
   };
 };
 

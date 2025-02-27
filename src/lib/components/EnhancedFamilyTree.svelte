@@ -6,6 +6,7 @@
   import NodeActions from './NodeActions.svelte';
   import AddPersonForm from './AddPersonForm.svelte';
   import AddExistingUserForm from './AddExistingUserForm.svelte';
+  import PersonSearch from './PersonSearch.svelte';
   
   // Props
   export let treeId: string;
@@ -21,9 +22,13 @@
   let error: string | null = null;
   let showAddPersonForm = false;
   let showAddExistingUserForm = false;
+  let showPersonSearchForm = false;
   let addingRootPerson = false;
   let relatedToPersonId: string | null = null;
   let existingUserRelationshipType: 'parent' | 'child' | 'sibling' | null = null;
+  let personSearchRelationshipType: 'parent' | 'child' | 'sibling' | null = null;
+  let activeTab: 'create' | 'search' = 'create';
+  let selectedSearchPerson: { id: string; firstName: string; lastName: string | null } | null = null;
   
   // Create a dispatch for tree events
   const dispatch = createEventDispatcher<{
@@ -109,7 +114,6 @@
     }
   }
   
-  // Relationship actions
   function handleNodeSelect(event: CustomEvent<{ nodeId: string, personId: string }>) {
     const { nodeId, personId } = event.detail;
     selectedNodeId = nodeId;
@@ -141,17 +145,12 @@
     showAddPersonForm = true;
   }
   
-  function handleAddRootPerson(event: CustomEvent<{ personId?: string }>) {
-    if (event.detail.personId) {
-      // Create a root node for an existing person
-      createRootNode(event.detail.personId);
-    } else {
-      // Create a completely new person as root
-      addingRootPerson = true;
-      relationshipType = null;
-      relatedToPersonId = null;
-      showAddPersonForm = true;
-    }
+  function handleAddPerson() {
+    // Open add person form without any relationship constraints
+    addingRootPerson = false;
+    relationshipType = null;
+    relatedToPersonId = null;
+    showAddPersonForm = true;
   }
   
   function handleEditPerson(event: CustomEvent<{ personId: string }>) {
@@ -171,6 +170,8 @@
     addingRootPerson = false;
     relationshipType = null;
     relatedToPersonId = null;
+    activeTab = 'create';
+    selectedSearchPerson = null;
   }
   
   function handleAddExistingUser(event: CustomEvent<{
@@ -190,18 +191,43 @@
     relatedToPersonId = null;
   }
   
+  function handleSearchPerson(event: CustomEvent<{
+    relationshipType: 'parent' | 'child' | 'sibling';
+    personId: string;
+  }>) {
+    const { relationshipType: relType, personId } = event.detail;
+    selectedPersonId = personId;
+    personSearchRelationshipType = relType;
+    relatedToPersonId = personId;
+    showPersonSearchForm = true;
+  }
+  
+  function handleClosePersonSearchForm() {
+    showPersonSearchForm = false;
+    personSearchRelationshipType = null;
+    relatedToPersonId = null;
+  }
+  
+  function handlePersonSelected(event: CustomEvent<{
+    id: string;
+    firstName: string;
+    lastName: string | null;
+  }>) {
+    selectedSearchPerson = event.detail;
+  }
+  
   function handlePersonAdded(event: CustomEvent<Person>) {
     const newPerson = event.detail;
     
     // Add the new person to our local state
     people = [newPerson, ...people];
     
-    // Create node relationships based on the context
-    if (addingRootPerson) {
-      // Create a root node for the new person
-      createRootNode(newPerson.id);
-    } else if (relationshipType && relatedToPersonId) {
-      // Create a relationship node
+    // Create node and relationships based on the context
+    if (!relationshipType || !relatedToPersonId) {
+      // Just create a visual node for this person
+      createVisualNode(newPerson.id);
+    } else {
+      // Create a relationship node with the related person
       createRelationshipNode(newPerson.id, relatedToPersonId, relationshipType);
     }
     
@@ -215,8 +241,8 @@
     dispatch('personAdded', newPerson);
   }
   
-  // Create a root node for a person
-  async function createRootNode(personId: string) {
+  // Create a visual node for a person
+  async function createVisualNode(personId: string, x = 0, y = 0) {
     try {
       const response = await fetch('/api/nodes', {
         method: 'POST',
@@ -226,8 +252,8 @@
         body: JSON.stringify({
           personId,
           treeId,
-          type: 'ROOT',
-          position: JSON.stringify({ x: 0, y: 0 })
+          x,
+          y
         })
       });
       
@@ -237,16 +263,17 @@
         nodes = [...nodes, result.node];
         selectedNodeId = result.node.id;
       } else {
-        error = result.error || 'Failed to create root node';
+        error = result.error || 'Failed to create node';
       }
     } catch (err) {
-      error = 'An error occurred while creating the root node';
+      error = 'An error occurred while creating the node';
     }
   }
   
-  // Create a relationship node
+  // Create a relationship node and connection
   async function createRelationshipNode(personId: string, relatedToPersonId: string, relationshipType: string) {
     try {
+      // First create the visual node
       const response = await fetch('/api/nodes', {
         method: 'POST',
         headers: {
@@ -255,20 +282,66 @@
         body: JSON.stringify({
           personId,
           treeId,
-          type: relationshipType.toUpperCase(),
-          relatedToPersonId,
-          position: JSON.stringify({ x: 0, y: 0 }) // Position will be calculated by the tree layout
+          x: 0,
+          y: 0
         })
       });
       
       const result = await response.json();
       
-      if (result.success) {
-        nodes = [...nodes, result.node];
-        selectedNodeId = result.node.id;
-      } else {
-        error = result.error || `Failed to create ${relationshipType} relationship`;
+      if (!result.success) {
+        error = result.error || `Failed to create node for ${relationshipType} relationship`;
+        return;
       }
+      
+      // Now create the appropriate relationship
+      if (relationshipType.toUpperCase() === 'PARENT') {
+        // Create parent-child relationship (current person is the parent)
+        const relationResponse = await fetch('/api/family-relations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            parentId: personId,
+            childId: relatedToPersonId,
+            relationType: 'BIOLOGICAL',
+            treeId
+          })
+        });
+      } else if (relationshipType.toUpperCase() === 'CHILD') {
+        // Create child-parent relationship (current person is the child)
+        const relationResponse = await fetch('/api/family-relations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            parentId: relatedToPersonId,
+            childId: personId,
+            relationType: 'BIOLOGICAL',
+            treeId
+          })
+        });
+      } else if (relationshipType.toUpperCase() === 'SIBLING') {
+        // Create sibling relationship
+        const relationResponse = await fetch('/api/relationships', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fromPersonId: personId,
+            toPersonId: relatedToPersonId,
+            type: 'SIBLING',
+            treeId
+          })
+        });
+      }
+      
+      // Update local state
+      nodes = [...nodes, result.node];
+      selectedNodeId = result.node.id;
     } catch (err) {
       error = `An error occurred while creating the ${relationshipType} relationship`;
     }
@@ -303,9 +376,7 @@
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
           <div class="p-4 border-b flex justify-between items-center">
             <h3 class="text-lg font-semibold">
-              {#if addingRootPerson}
-                Add Root Person
-              {:else if relationshipType && relatedPerson}
+              {#if relationshipType && relatedPerson}
                 Add {relationshipType.charAt(0).toUpperCase() + relationshipType.slice(1)} for {relatedPerson.firstName} {relatedPerson.lastName || ''}
               {:else}
                 Add Person
@@ -320,11 +391,71 @@
               </svg>
             </button>
           </div>
+          
+          <!-- Tab navigation -->
+          <div class="flex border-b border-gray-200">
+            <button
+              on:click={() => { activeTab = 'create'; selectedSearchPerson = null; }}
+              class="flex-1 py-2 px-4 text-center {activeTab === 'create' ? 'border-b-2 border-blue-500 text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}"
+            >
+              Create New
+            </button>
+            <button
+              on:click={() => activeTab = 'search'}
+              class="flex-1 py-2 px-4 text-center {activeTab === 'search' ? 'border-b-2 border-blue-500 text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}"
+            >
+              Find Existing
+            </button>
+          </div>
+          
           <div class="p-4">
-            <AddPersonForm
-              treeId={treeId}
-              on:personAdded={handlePersonAdded}
-            />
+            {#if activeTab === 'create'}
+              <!-- Create new person tab -->
+              <AddPersonForm
+                treeId={treeId}
+                on:personAdded={handlePersonAdded}
+              />
+            {:else}
+              <!-- Search tab -->
+              <div>
+                {#if selectedSearchPerson}
+                  <div class="mb-6">
+                    <div class="bg-blue-50 p-4 rounded-md mb-4">
+                      <h3 class="font-medium text-blue-800 mb-2">Selected Person</h3>
+                      <p class="text-blue-700">{selectedSearchPerson.firstName} {selectedSearchPerson.lastName || ''}</p>
+                    </div>
+                    
+                    <button
+                      on:click={() => {
+                        createVisualNode(selectedSearchPerson.id);
+                        if (relationshipType && relatedToPersonId) {
+                          createRelationshipNode(selectedSearchPerson.id, relatedToPersonId, relationshipType);
+                        }
+                        handleCloseAddPersonForm();
+                      }}
+                      class="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700"
+                    >
+                      Add to Tree
+                    </button>
+                    
+                    <button
+                      on:click={() => selectedSearchPerson = null}
+                      class="w-full mt-2 py-2 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                {/if}
+                
+                <PersonSearch
+                  placeholder="Search by name..."
+                  label="Find Person"
+                  treeId={treeId}
+                  on:personSelected={(e) => selectedSearchPerson = e.detail}
+                  on:cancel={handleCloseAddPersonForm}
+                />
+              </div>
+            {/if}
           </div>
         </div>
       </div>
@@ -363,18 +494,52 @@
       </div>
     {/if}
     
+    {#if showPersonSearchForm}
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="text-lg font-semibold">
+              {#if personSearchRelationshipType && relatedPerson}
+                Find Existing Person as {personSearchRelationshipType.charAt(0).toUpperCase() + personSearchRelationshipType.slice(1)} for {relatedPerson.firstName} {relatedPerson.lastName || ''}
+              {:else}
+                Find Person
+              {/if}
+            </h3>
+            <button
+              on:click={handleClosePersonSearchForm}
+              class="text-gray-400 hover:text-gray-600"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="p-4">
+            <PersonSearch
+              placeholder="Search by first or last name"
+              label="Find Person"
+              on:personSelected={handlePersonSelected}
+              on:cancel={handleClosePersonSearchForm}
+            />
+          </div>
+        </div>
+      </div>
+    {/if}
+    
     <!-- Main tree canvas -->
     <TreeCanvas
       {people}
       {nodes}
       {media}
-      rootNodeId={nodes.length > 0 ? nodes[0].id : null}
       on:nodeSelect={handleNodeSelect}
       on:addParent={handleAddParent}
       on:addChild={handleAddChild}
       on:addSibling={handleAddSibling}
       on:editPerson={handleEditPerson}
-      on:addRootPerson={handleAddRootPerson}
+      on:addPerson={handleAddPerson}
+      on:searchParent={(e) => handleSearchPerson({ detail: { relationshipType: 'parent', personId: e.detail.personId } })}
+      on:searchChild={(e) => handleSearchPerson({ detail: { relationshipType: 'child', personId: e.detail.personId } })}
+      on:searchSibling={(e) => handleSearchPerson({ detail: { relationshipType: 'sibling', personId: e.detail.personId } })}
     />
     
     <!-- Node actions panel - shown when a node is selected -->

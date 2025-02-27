@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { prisma } from '$lib/server/prismaservice';
+import { sanitizeUserForClient } from '$lib/utils/userUtils';
 
 export const load: PageServerLoad = async ({ locals }) => {
     if (!locals.user) {
@@ -18,7 +19,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     });
 
     return {
-        user: locals.user,
+        user: sanitizeUserForClient(locals.user),
         trees
     };
 };

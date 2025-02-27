@@ -1,19 +1,19 @@
 import { auth } from '$lib/server/lucia';
 import type { Handle } from '@sveltejs/kit';
 
-// Sanitize user data by excluding sensitive fields and converting binary data
-function sanitizeUser(user: any) {
-    if (!user) return null;
-    const { recoveryCode, ...safeUser } = user;
-    return {
-        ...safeUser,
-        // Only include fields we need on the client
-        userId: user.userId,
-        email: user.email,
-        username: user.username,
-        emailVerified: user.emailVerified
-    };
-}
+// This was causing issues - we'll handle sanitization in layout.server.ts instead
+// function sanitizeUser(user: any) {
+//     if (!user) return null;
+//     const { recoveryCode, ...safeUser } = user;
+//     return {
+//         ...safeUser,
+//         // Only include fields we need on the client
+//         userId: user.userId,
+//         email: user.email,
+//         username: user.username,
+//         emailVerified: user.emailVerified
+//     };
+// }
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(auth.sessionCookieName);
@@ -41,7 +41,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		});
 	}
 	event.locals.auth = auth;
-	event.locals.user = sanitizeUser(user);
+	event.locals.user = user;  // Keep the original user object
 	event.locals.session = session;
 	return await resolve(event);
 };

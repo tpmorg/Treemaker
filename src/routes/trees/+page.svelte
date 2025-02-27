@@ -124,7 +124,15 @@
     
     <!-- Tree selection always visible at the top -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
-      <h2 class="text-xl font-semibold text-gray-800 mb-4">Your Family Trees</h2>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">Your Family Trees</h2>
+        <button
+          on:click={() => { showTreeForm = !showTreeForm; }}
+          class="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          {showTreeForm ? 'Cancel' : 'Add Tree'}
+        </button>
+      </div>
       
       {#if trees.length === 0}
         <div class="p-4 bg-yellow-50 rounded-md mb-4">
@@ -144,13 +152,6 @@
               <option value={tree.id}>{tree.name}</option>
             {/each}
           </select>
-          
-          <button
-            on:click={() => { showTreeForm = !showTreeForm; }}
-            class="ml-auto py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            {showTreeForm ? 'Cancel' : 'Create New Tree'}
-          </button>
         </div>
       {/if}
     </div>

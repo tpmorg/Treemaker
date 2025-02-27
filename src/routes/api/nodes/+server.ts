@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }
 };
 
-// Create a new node and establish relationships
+// Create a new node for visual positioning
 export const POST: RequestHandler = async ({ request, locals }) => {
     // Check if user is authenticated
     if (!locals.user) {
@@ -66,8 +66,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             return json({ success: false, error: 'Tree ID is required' }, { status: 400 });
         }
         
-        if (!data.type) {
-            return json({ success: false, error: 'Node type is required' }, { status: 400 });
+        // Remove legacy 'type' field if present - schema no longer contains it
+        if (data.type) {
+            delete data.type;
         }
         
         // Verify the tree exists and belongs to the user
@@ -94,41 +95,60 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             return json({ success: false, error: 'Person not found or does not belong to the tree' }, { status: 404 });
         }
         
-        // Create the node
+        // Create the node with visual positioning information
         const node = await prisma.node.create({
             data: {
-                type: data.type,
                 personId: data.personId,
                 treeId: data.treeId,
-                position: data.position || undefined
+                x: data.x !== undefined ? parseFloat(String(data.x)) : null,
+                y: data.y !== undefined ? parseFloat(String(data.y)) : null
             }
         });
         
-        // Create relationships if specified
-        if (data.relatedToNodeId) {
-            // Create the relationship between nodes
-            // Note: This code assumes your Node model allows for relationships between nodes
-            // You might need to adjust this based on your actual database model
-            
-            // Example: Relate this node to another node (e.g., child to parent)
-            await prisma.node.update({
-                where: { id: node.id },
-                data: {
-                    relatedTo: {
-                        connect: { id: data.relatedToNodeId }
+        // If creating a parent-child or sibling relationship, also create the family relation
+        if (data.relationType && data.relatedToPersonId) {
+            if (data.relationType === 'PARENT') {
+                // Create parent-child relationship (current person is the parent)
+                await prisma.familyRelation.create({
+                    data: {
+                        parentId: data.personId,
+                        childId: data.relatedToPersonId,
+                        relationType: data.subType || 'BIOLOGICAL',
+                        treeId: data.treeId
                     }
-                }
-            });
+                });
+            } else if (data.relationType === 'CHILD') {
+                // Create child-parent relationship (current person is the child)
+                await prisma.familyRelation.create({
+                    data: {
+                        parentId: data.relatedToPersonId,
+                        childId: data.personId,
+                        relationType: data.subType || 'BIOLOGICAL',
+                        treeId: data.treeId
+                    }
+                });
+            } else if (data.relationType === 'SIBLING' || data.relationType === 'SPOUSE') {
+                // Create sibling or spouse relationship
+                await prisma.relationship.create({
+                    data: {
+                        fromPersonId: data.personId,
+                        toPersonId: data.relatedToPersonId,
+                        type: data.relationType,
+                        subtype: data.subType,
+                        treeId: data.treeId
+                    }
+                });
+            }
         }
         
         return json({ 
             success: true, 
             node: {
                 id: node.id,
-                type: node.type,
                 personId: node.personId,
                 treeId: node.treeId,
-                position: node.position,
+                x: node.x,
+                y: node.y,
                 createdAt: node.createdAt
             }
         });
@@ -139,7 +159,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
 };
 
-// Update a node
+// Update a node (visual position only)
 export const PATCH: RequestHandler = async ({ request, locals }) => {
     // Check if user is authenticated
     if (!locals.user) {
@@ -169,37 +189,14 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
             return json({ success: false, error: 'Access denied' }, { status: 403 });
         }
         
-        // Update the node
+        // Update only the visual position of the node
         const node = await prisma.node.update({
             where: { id: data.nodeId },
             data: {
-                type: data.type || undefined,
-                position: data.position || undefined
+                x: data.x !== undefined ? parseFloat(data.x) : undefined,
+                y: data.y !== undefined ? parseFloat(data.y) : undefined
             }
         });
-        
-        // Update relationships if specified
-        if (data.addRelatedToNodeId) {
-            await prisma.node.update({
-                where: { id: node.id },
-                data: {
-                    relatedTo: {
-                        connect: { id: data.addRelatedToNodeId }
-                    }
-                }
-            });
-        }
-        
-        if (data.removeRelatedToNodeId) {
-            await prisma.node.update({
-                where: { id: node.id },
-                data: {
-                    relatedTo: {
-                        disconnect: { id: data.removeRelatedToNodeId }
-                    }
-                }
-            });
-        }
         
         return json({ success: true, node });
     } catch (error) {

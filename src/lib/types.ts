@@ -45,10 +45,10 @@ export interface Media {
 
 export interface Node {
   id: string;
-  type: string;
   personId: string;
   treeId: string;
-  position?: string;
+  x?: number;
+  y?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -62,4 +62,34 @@ export interface Layout {
   treeId: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface FamilyRelation {
+  id: string;
+  parentId: string;
+  childId: string;
+  relationType: 'BIOLOGICAL' | 'ADOPTIVE' | 'STEP' | 'FOSTER';
+  treeId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Relationship {
+  id: string;
+  fromPersonId: string;
+  toPersonId: string;
+  type: 'SPOUSE' | 'SIBLING';
+  subtype?: 'HALF_SIBLING' | 'STEP_SIBLING' | null;
+  startDate?: string;
+  endDate?: string;
+  treeId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PersonWithRelationships extends Person {
+  parents?: Person[];
+  children?: Person[];
+  siblings?: Person[];
+  spouses?: Person[];
 }
