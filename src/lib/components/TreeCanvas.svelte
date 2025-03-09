@@ -29,10 +29,7 @@
   // Create a dispatch function for events
   const dispatch = createEventDispatcher<{
     nodeSelect: { nodeId: string, personId: string };
-    addParent: { personId: string };
-    addChild: { personId: string };
-    addSibling: { personId: string };
-    addSpouse: { personId: string };
+    addRelationship: { personId: string, relationshipType: 'parent' | 'child' | 'sibling' | 'spouse' };
     editPerson: { personId: string };
     addMedia: { personId: string };
     addPerson: {};
@@ -308,16 +305,8 @@
     }
   }
   
-  function handleAddParent(event: CustomEvent<{ personId: string }>) {
-    dispatch('addParent', event.detail);
-  }
-  
-  function handleAddChild(event: CustomEvent<{ personId: string }>) {
-    dispatch('addChild', event.detail);
-  }
-  
-  function handleAddSibling(event: CustomEvent<{ personId: string }>) {
-    dispatch('addSibling', event.detail);
+  function handleAddRelationship(event: CustomEvent<{ personId: string, relationshipType: 'parent' | 'child' | 'sibling' | 'spouse' }>) {
+    dispatch('addRelationship', event.detail);
   }
   
   function handleEditPerson(event: CustomEvent<{ personId: string }>) {
@@ -679,26 +668,7 @@
         }
       });
       
-      // Connect to spouses
-      if (item.person.spouses) {
-        item.person.spouses.forEach(spouse => {
-          const spouseNode = layoutData.find(n => n.person.id === spouse.id);
-          if (spouseNode) {
-            connections.push({
-              from: { 
-                x: item.position.x + NODE_WIDTH / 2, 
-                y: item.position.y + NODE_WIDTH / 2 
-              },
-              to: { 
-                x: spouseNode.position.x + NODE_WIDTH / 2, 
-                y: spouseNode.position.y + NODE_WIDTH / 2 
-              },
-              type: 'spouse',
-              subtype: spouse.relationshipType === 'CURRENT' ? 'current' : 'former'
-            });
-          }
-        });
-      }
+      
 
       // Connect to siblings
       item.siblingIds.forEach(siblingId => {
@@ -805,9 +775,6 @@
                 primaryMedia={getPrimaryMedia(item.person.id)}
                 isSelected={selectedNodeId === item.node.id}
                 on:select={handleNodeSelect}
-                on:addParent={handleAddParent}
-                on:addChild={handleAddChild}
-                on:addSibling={handleAddSibling}
                 on:edit={handleEditPerson}
                 on:delete={handleDeleteNode}
               />
@@ -861,21 +828,24 @@
         <!-- Person details -->
         <div class="p-4 flex-grow overflow-y-auto">
           <div class="flex items-center mb-6">
-            <img 
-              src={getPrimaryMedia(selectedPersonId)?.url || (findPerson(selectedPersonId).gender === 'female' ? '/src/images/default-female.svg' : '/src/images/default-male.svg')} 
-              alt={findPerson(selectedPersonId).firstName}
-              class="w-20 h-20 rounded-full object-cover border-2 border-gray-300 mr-4"
-            />
-            <div>
-              <h3 class="text-xl font-semibold">{findPerson(selectedPersonId).firstName} {findPerson(selectedPersonId).lastName || ''}</h3>
-              {#if findPerson(selectedPersonId).birthDate || findPerson(selectedPersonId).deathDate}
-                <p class="text-gray-600">
-                  {findPerson(selectedPersonId).birthDate ? new Date(findPerson(selectedPersonId).birthDate).getFullYear() : '?'} - 
-                  {findPerson(selectedPersonId).deathDate ? new Date(findPerson(selectedPersonId).deathDate).getFullYear() : 'Present'}
-                </p>
-              {/if}
-              <p class="text-gray-600 capitalize">{findPerson(selectedPersonId).gender || 'Unknown'}</p>
-            </div>
+            {#if selectedPersonId && findPerson(selectedPersonId)}
+              {@const person = findPerson(selectedPersonId)!}
+              <img
+                src={getPrimaryMedia(selectedPersonId)?.url || (person.gender === 'female' ? '/src/images/default-female.svg' : '/src/images/default-male.svg')}
+                alt={person.firstName}
+                class="w-20 h-20 rounded-full object-cover border-2 border-gray-300 mr-4"
+              />
+              <div>
+                <h3 class="text-xl font-semibold">{person.firstName} {person.lastName || ''}</h3>
+                {#if person.birthDate || person.deathDate}
+                  <p class="text-gray-600">
+                    {person.birthDate ? new Date(person.birthDate).getFullYear() : '?'} -
+                    {person.deathDate ? new Date(person.deathDate).getFullYear() : 'Present'}
+                  </p>
+                {/if}
+                <p class="text-gray-600 capitalize">{person.gender || 'Unknown'}</p>
+              </div>
+            {/if}
           </div>
           
           <!-- Relationship dropdown -->
@@ -895,8 +865,10 @@
                 <div class="absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg overflow-hidden">
                   <button
                     on:click={() => {
-                      dispatch('addParent', { personId: selectedPersonId });
-                      showRelationshipDropdown = false;
+                      if (selectedPersonId) {
+                        dispatch('addRelationship', { personId: selectedPersonId, relationshipType: 'parent' });
+                        showRelationshipDropdown = false;
+                      }
                     }}
                     class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
                   >
@@ -904,8 +876,10 @@
                   </button>
                   <button
                     on:click={() => {
-                      dispatch('addChild', { personId: selectedPersonId });
-                      showRelationshipDropdown = false;
+                      if (selectedPersonId) {
+                        dispatch('addRelationship', { personId: selectedPersonId, relationshipType: 'child' });
+                        showRelationshipDropdown = false;
+                      }
                     }}
                     class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
                   >
@@ -913,8 +887,10 @@
                   </button>
                   <button
                     on:click={() => {
-                      dispatch('addSibling', { personId: selectedPersonId });
-                      showRelationshipDropdown = false;
+                      if (selectedPersonId) {
+                        dispatch('addRelationship', { personId: selectedPersonId, relationshipType: 'sibling' });
+                        showRelationshipDropdown = false;
+                      }
                     }}
                     class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
                   >
@@ -922,8 +898,10 @@
                   </button>
                   <button
                     on:click={() => {
-                      showSpouseForm = true;
-                      showRelationshipDropdown = false;
+                      if (selectedPersonId) {
+                        dispatch('addRelationship', { personId: selectedPersonId, relationshipType: 'spouse' });
+                        showRelationshipDropdown = false;
+                      }
                     }}
                     class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
                   >
@@ -1030,8 +1008,10 @@
           <!-- Dispatch to parent to handle editing -->
           <button 
             on:click={() => {
-              dispatch('editPerson', { personId: selectedPersonId });
-              showEditForm = false;
+              if (selectedPersonId) {
+                dispatch('editPerson', { personId: selectedPersonId });
+                showEditForm = false;
+              }
             }}
             class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
@@ -1067,35 +1047,7 @@
     </div>
   {/if}
   
-  <!-- Add Spouse Form Modal -->
-  {#if showSpouseForm && selectedPersonId}
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
-      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div class="p-4 border-b flex justify-between items-center">
-          <h3 class="text-lg font-semibold">Add Spouse</h3>
-          <button
-            on:click={() => showSpouseForm = false}
-            class="text-gray-400 hover:text-gray-600"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
-        </div>
-        <div class="p-4">
-          <button 
-            on:click={() => {
-              dispatch('addSpouse', { personId: selectedPersonId });
-              showSpouseForm = false;
-            }}
-            class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            Continue to Add Spouse
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+
 </div>
 
 <style>

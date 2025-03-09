@@ -17,7 +17,7 @@
   // State
   let selectedNodeId: string | null = null;
   let selectedPersonId: string | null = null;
-  let relationshipType: 'parent' | 'child' | 'sibling' | null = null;
+  let relationshipType: 'parent' | 'child' | 'sibling' | 'spouse' | null = null;
   let isLoading = true;
   let error: string | null = null;
   let showAddPersonForm = false;
@@ -121,26 +121,9 @@
     relationshipType = null;
   }
   
-  function handleAddParent(event: CustomEvent<{ personId: string }>) {
-    const { personId } = event.detail;
+  function handleAddRelationship(event: CustomEvent<{ personId: string, relationshipType: 'parent' | 'child' | 'sibling' | 'spouse' }>) {
+    const { personId, relationshipType } = event.detail;
     selectedPersonId = personId;
-    relationshipType = 'parent';
-    relatedToPersonId = personId;
-    showAddPersonForm = true;
-  }
-  
-  function handleAddChild(event: CustomEvent<{ personId: string }>) {
-    const { personId } = event.detail;
-    selectedPersonId = personId;
-    relationshipType = 'child';
-    relatedToPersonId = personId;
-    showAddPersonForm = true;
-  }
-  
-  function handleAddSibling(event: CustomEvent<{ personId: string }>) {
-    const { personId } = event.detail;
-    selectedPersonId = personId;
-    relationshipType = 'sibling';
     relatedToPersonId = personId;
     showAddPersonForm = true;
   }
@@ -468,11 +451,13 @@
                     
                     <button
                       on:click={() => {
-                        createVisualNode(selectedSearchPerson.id);
-                        if (relationshipType && relatedToPersonId) {
-                          createRelationshipNode(selectedSearchPerson.id, relatedToPersonId, relationshipType);
+                        if (selectedSearchPerson) {
+                          createVisualNode(selectedSearchPerson.id);
+                          if (relationshipType && relatedToPersonId) {
+                            createRelationshipNode(selectedSearchPerson.id, relatedToPersonId, relationshipType);
+                          }
+                          handleCloseAddPersonForm();
                         }
-                        handleCloseAddPersonForm();
                       }}
                       class="w-full py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700"
                     >
@@ -607,9 +592,7 @@
       {nodes}
       {media}
       on:nodeSelect={handleNodeSelect}
-      on:addParent={handleAddParent}
-      on:addChild={handleAddChild}
-      on:addSibling={handleAddSibling}
+      on:addRelationship={handleAddRelationship}
       on:editPerson={handleEditPerson}
       on:addMedia={(e) => {
         selectedPersonId = e.detail.personId;
