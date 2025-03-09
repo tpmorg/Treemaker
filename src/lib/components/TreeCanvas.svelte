@@ -18,6 +18,7 @@
   let selectedPersonId: string | null = null;
   let showMediaForm = false;
   let showEditForm = false;
+  let showRelationshipDropdown = false;
   let isPanning = false;
   let startPanX = 0;
   let startPanY = 0;
@@ -30,6 +31,7 @@
     addParent: { personId: string };
     addChild: { personId: string };
     addSibling: { personId: string };
+    addSpouse: { personId: string };
     editPerson: { personId: string };
     addMedia: { personId: string };
     addPerson: {};
@@ -853,26 +855,60 @@
             </div>
           </div>
           
-          <!-- Add relationship buttons -->
-          <div class="grid grid-cols-3 gap-2 mb-6">
-            <button 
-              on:click={() => dispatch('addParent', { personId: selectedPersonId })}
-              class="py-2 px-3 bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors"
-            >
-              Add Parent
-            </button>
-            <button 
-              on:click={() => dispatch('addChild', { personId: selectedPersonId })}
-              class="py-2 px-3 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
-            >
-              Add Child
-            </button>
-            <button 
-              on:click={() => dispatch('addSibling', { personId: selectedPersonId })}
-              class="py-2 px-3 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 transition-colors"
-            >
-              Add Sibling
-            </button>
+          <!-- Relationship dropdown -->
+          <div class="mb-6">
+            <div class="relative">
+              <button
+                on:click={() => showRelationshipDropdown = !showRelationshipDropdown}
+                class="w-full flex items-center justify-between py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors"
+              >
+                <span>Add Relationship</span>
+                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {#if showRelationshipDropdown}
+                <div class="absolute z-10 mt-1 w-full bg-white rounded-md shadow-lg overflow-hidden">
+                  <button
+                    on:click={() => {
+                      dispatch('addParent', { personId: selectedPersonId });
+                      showRelationshipDropdown = false;
+                    }}
+                    class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
+                  >
+                    Add Parent
+                  </button>
+                  <button
+                    on:click={() => {
+                      dispatch('addChild', { personId: selectedPersonId });
+                      showRelationshipDropdown = false;
+                    }}
+                    class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
+                  >
+                    Add Child
+                  </button>
+                  <button
+                    on:click={() => {
+                      dispatch('addSibling', { personId: selectedPersonId });
+                      showRelationshipDropdown = false;
+                    }}
+                    class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
+                  >
+                    Add Sibling
+                  </button>
+                  <button
+                    on:click={() => {
+                      dispatch('addSpouse', { personId: selectedPersonId });
+                      showRelationshipDropdown = false;
+                    }}
+                    class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
+                  >
+                    Add Spouse
+                  </button>
+                </div>
+              {/if}
+            </div>
           </div>
           
           <!-- Action buttons -->
