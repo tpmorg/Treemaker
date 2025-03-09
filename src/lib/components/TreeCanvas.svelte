@@ -19,6 +19,7 @@
   let showMediaForm = false;
   let showEditForm = false;
   let showRelationshipDropdown = false;
+  let showSpouseForm = false;
   let isPanning = false;
   let startPanX = 0;
   let startPanY = 0;
@@ -655,6 +656,7 @@
       from: { x: number, y: number };
       to: { x: number, y: number };
       type: 'parent-child' | 'spouse' | 'sibling';
+      subtype?: 'current' | 'former';
     }[] = [];
     
     // For each node in the layout
@@ -677,6 +679,27 @@
         }
       });
       
+      // Connect to spouses
+      if (item.person.spouses) {
+        item.person.spouses.forEach(spouse => {
+          const spouseNode = layoutData.find(n => n.person.id === spouse.id);
+          if (spouseNode) {
+            connections.push({
+              from: { 
+                x: item.position.x + NODE_WIDTH / 2, 
+                y: item.position.y + NODE_WIDTH / 2 
+              },
+              to: { 
+                x: spouseNode.position.x + NODE_WIDTH / 2, 
+                y: spouseNode.position.y + NODE_WIDTH / 2 
+              },
+              type: 'spouse',
+              subtype: spouse.relationshipType === 'CURRENT' ? 'current' : 'former'
+            });
+          }
+        });
+      }
+
       // Connect to siblings
       item.siblingIds.forEach(siblingId => {
         const siblingNode = layoutData.find(n => n.node.id === siblingId);
@@ -899,7 +922,7 @@
                   </button>
                   <button
                     on:click={() => {
-                      dispatch('addSpouse', { personId: selectedPersonId });
+                      showSpouseForm = true;
                       showRelationshipDropdown = false;
                     }}
                     class="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100"
@@ -1039,6 +1062,36 @@
             personId={selectedPersonId} 
             on:mediaAdded={() => showMediaForm = false}
           />
+        </div>
+      </div>
+    </div>
+  {/if}
+  
+  <!-- Add Spouse Form Modal -->
+  {#if showSpouseForm && selectedPersonId}
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-4 border-b flex justify-between items-center">
+          <h3 class="text-lg font-semibold">Add Spouse</h3>
+          <button
+            on:click={() => showSpouseForm = false}
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-4">
+          <button 
+            on:click={() => {
+              dispatch('addSpouse', { personId: selectedPersonId });
+              showSpouseForm = false;
+            }}
+            class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Continue to Add Spouse
+          </button>
         </div>
       </div>
     </div>
