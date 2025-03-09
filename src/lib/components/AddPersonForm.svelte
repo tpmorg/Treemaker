@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import type { Person } from '$lib/types';
   
   export let treeId: string;
+  export let personId: string | null = null;
+  export let isEditMode: boolean = false;
   
   const dispatch = createEventDispatcher();
   
@@ -18,6 +20,38 @@
   let errors: Record<string, string> = {};
   let isSubmitting = false;
   let successMessage = '';
+  
+  // If in edit mode and personId is provided, fetch the person data
+  onMount(async () => {
+    if (isEditMode && personId) {
+      try {
+        const response = await fetch(`/api/people/${personId}`);
+        const result = await response.json();
+        
+        if (result.success && result.person) {
+          // Format dates properly for date inputs
+          const formatDate = (dateString: string | null) => {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toISOString().split('T')[0];
+          };
+          
+          formData = {
+            firstName: result.person.firstName || '',
+            lastName: result.person.lastName || '',
+            birthDate: formatDate(result.person.birthDate),
+            deathDate: formatDate(result.person.deathDate),
+            gender: result.person.gender || '',
+            notes: result.person.notes || ''
+          };
+        } else {
+          errors.submit = result.error || 'Failed to load person data';
+        }
+      } catch (error) {
+        errors.submit = 'An error occurred while fetching person data';
+      }
+    }
+  });
   
   const genderOptions = [
     { value: 'male', label: 'Male' },
@@ -50,8 +84,18 @@
     
     try {
       isSubmitting = true;
-      const response = await fetch('/api/people', {
-        method: 'POST',
+      
+      let url = '/api/people';
+      let method = 'POST';
+      
+      // If in edit mode, use PUT request to update
+      if (isEditMode && personId) {
+        url = `/api/people/${personId}`;
+        method = 'PUT';
+      }
+      
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -66,18 +110,27 @@
         throw new Error(result.error);
       }
       
-      successMessage = 'Person added successfully!';
-      dispatch('personAdded', result.person);
+      successMessage = isEditMode 
+        ? 'Person updated successfully!' 
+        : 'Person added successfully!';
       
-      // Reset form
-      formData = {
-        firstName: '',
-        lastName: '',
-        birthDate: '',
-        deathDate: '',
-        gender: '',
-        notes: ''
-      };
+      if (isEditMode) {
+        dispatch('personUpdated', result.person);
+      } else {
+        dispatch('personAdded', result.person);
+      }
+      
+      // Only reset form if not in edit mode
+      if (!isEditMode) {
+        formData = {
+          firstName: '',
+          lastName: '',
+          birthDate: '',
+          deathDate: '',
+          gender: '',
+          notes: ''
+        };
+      }
       
       // Clear success message after 3 seconds
       setTimeout(() => {
@@ -97,7 +150,9 @@
 </script>
 
 <div class="bg-white rounded-lg shadow p-6">
-  <h2 class="text-xl font-semibold text-gray-800 mb-6">Add New Person</h2>
+  <h2 class="text-xl font-semibold text-gray-800 mb-6">
+    {isEditMode ? 'Edit Person' : 'Add New Person'}
+  </h2>
   
   {#if successMessage}
     <div class="mb-4 p-3 bg-green-100 text-green-700 rounded">
@@ -207,9 +262,9 @@
       class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
     >
       {#if isSubmitting}
-        Adding...
+        {isEditMode ? 'Updating...' : 'Adding...'}
       {:else}
-        Add Person
+        {isEditMode ? 'Update Person' : 'Add Person'}
       {/if}
     </button>
   </form>

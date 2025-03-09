@@ -4,17 +4,19 @@
   import type { Person, Media } from '$lib/types';
   
   export let person: Person;
+  export let nodeId: string;
   export let isSelected: boolean = false;
   export let primaryMedia: Media | null = null;
   
   // Create a dispatch for node events
   const dispatch = createEventDispatcher<{
     select: { personId: string };
-    addParent: { personId: string };
-    addChild: { personId: string };
-    addSibling: { personId: string };
     edit: { personId: string };
+    delete: { personId: string, nodeId: string };
   }>();
+  
+  // State for confirmation dialog
+  let showDeleteConfirm = false;
   
   // Format birth/death dates for display
   $: birthYear = person.birthDate ? new Date(person.birthDate).getFullYear().toString() : null;
@@ -34,21 +36,21 @@
     dispatch('select', { personId: person.id });
   }
   
-  // Handle relationship buttons
-  function handleAddParent() {
-    dispatch('addParent', { personId: person.id });
+
+
+  function handleDeleteClick(event: MouseEvent) {
+    // Stop propagation to prevent the node selection
+    event.stopPropagation();
+    showDeleteConfirm = true;
   }
   
-  function handleAddChild() {
-    dispatch('addChild', { personId: person.id });
+  function handleConfirmDelete() {
+    dispatch('delete', { personId: person.id, nodeId });
+    showDeleteConfirm = false;
   }
   
-  function handleAddSibling() {
-    dispatch('addSibling', { personId: person.id });
-  }
-  
-  function handleEdit() {
-    dispatch('edit', { personId: person.id });
+  function handleCancelDelete() {
+    showDeleteConfirm = false;
   }
 </script>
 
@@ -58,6 +60,17 @@
   class:shadow-lg={isSelected}
   on:click={handleNodeClick}
 >
+  <!-- Delete button -->
+  <button 
+    class="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md z-10"
+    on:click={handleDeleteClick}
+    title="Delete node"
+  >
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+    </svg>
+  </button>
+  
   <!-- Person Image -->
   <div class="relative mb-2">
     <img
@@ -66,17 +79,6 @@
       class="w-20 h-20 rounded-full mx-auto object-cover border-2 {isSelected ? 'border-blue-500' : 'border-gray-300'}"
     />
     
-    <!-- Gender indicator (small icon top right of image) -->
-    {#if person.gender}
-      <div class="absolute top-0 right-0 rounded-full w-5 h-5 flex items-center justify-center text-white text-xs"
-        class:bg-blue-500={person.gender === 'male'}
-        class:bg-pink-500={person.gender === 'female'}
-        class:bg-purple-500={person.gender === 'other'}>
-        {#if person.gender === 'male'}M{/if}
-        {#if person.gender === 'female'}F{/if}
-        {#if person.gender === 'other'}O{/if}
-      </div>
-    {/if}
   </div>
   
   <!-- Person Details -->
@@ -97,3 +99,28 @@
     cursor: pointer;
   }
 </style>
+
+<!-- Confirmation Dialog -->
+{#if showDeleteConfirm}
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" on:click|self={handleCancelDelete}>
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-auto">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Confirm Deletion</h3>
+      <p class="text-gray-700 mb-6">Are you sure you want to delete {fullName} from the tree? This action cannot be undone.</p>
+      
+      <div class="flex justify-end space-x-3">
+        <button 
+          class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+          on:click={handleCancelDelete}
+        >
+          Cancel
+        </button>
+        <button 
+          class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+          on:click={handleConfirmDelete}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

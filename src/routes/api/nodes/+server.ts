@@ -95,15 +95,42 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             return json({ success: false, error: 'Person not found or does not belong to the tree' }, { status: 404 });
         }
         
-        // Create the node with visual positioning information
-        const node = await prisma.node.create({
-            data: {
+        // Check if a node already exists for this person in this tree
+        const existingNode = await prisma.node.findFirst({
+            where: {
                 personId: data.personId,
-                treeId: data.treeId,
-                x: data.x !== undefined ? parseFloat(String(data.x)) : null,
-                y: data.y !== undefined ? parseFloat(String(data.y)) : null
+                treeId: data.treeId
             }
         });
+        
+        let node;
+        
+        if (existingNode) {
+            // If a node already exists, update its position if needed
+            if ((data.x !== undefined && existingNode.x !== parseFloat(String(data.x))) || 
+                (data.y !== undefined && existingNode.y !== parseFloat(String(data.y)))) {
+                node = await prisma.node.update({
+                    where: { id: existingNode.id },
+                    data: {
+                        x: data.x !== undefined ? parseFloat(String(data.x)) : existingNode.x,
+                        y: data.y !== undefined ? parseFloat(String(data.y)) : existingNode.y
+                    }
+                });
+            } else {
+                // If no position update needed, just use the existing node
+                node = existingNode;
+            }
+        } else {
+            // If no node exists, create a new one
+            node = await prisma.node.create({
+                data: {
+                    personId: data.personId,
+                    treeId: data.treeId,
+                    x: data.x !== undefined ? parseFloat(String(data.x)) : null,
+                    y: data.y !== undefined ? parseFloat(String(data.y)) : null
+                }
+            });
+        }
         
         // If creating a parent-child or sibling relationship, also create the family relation
         if (data.relationType && data.relatedToPersonId) {

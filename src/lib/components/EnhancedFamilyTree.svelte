@@ -3,10 +3,10 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import type { Person, Media, Node as TreeNode } from '$lib/types';
   import TreeCanvas from './TreeCanvas.svelte';
-  import NodeActions from './NodeActions.svelte';
   import AddPersonForm from './AddPersonForm.svelte';
   import AddExistingUserForm from './AddExistingUserForm.svelte';
   import PersonSearch from './PersonSearch.svelte';
+  import AddMediaForm from './AddMediaForm.svelte';
   
   // Props
   export let treeId: string;
@@ -22,6 +22,8 @@
   let error: string | null = null;
   let showAddPersonForm = false;
   let showAddExistingUserForm = false;
+  let showMediaForm = false;
+  let showPersonForm = false;
   let addingRootPerson = false;
   let relatedToPersonId: string | null = null;
   let existingUserRelationshipType: 'parent' | 'child' | 'sibling' | null = null;
@@ -153,8 +155,28 @@
   
   function handleEditPerson(event: CustomEvent<{ personId: string }>) {
     const { personId } = event.detail;
-    // TODO: Implement edit functionality
-    console.log('Edit person:', personId);
+    selectedPersonId = personId;
+    showPersonForm = true;
+  }
+  
+  function handleClosePersonForm() {
+    showPersonForm = false;
+    selectedPersonId = null;
+  }
+  
+  function handlePersonUpdated(event: CustomEvent<Person>) {
+    const updatedPerson = event.detail;
+    
+    // Update the person in our local state
+    people = people.map(p => 
+      p.id === updatedPerson.id ? updatedPerson : p
+    );
+    
+    // Close the form
+    showPersonForm = false;
+    
+    // Forward the event
+    dispatch('personUpdated', updatedPerson);
   }
   
   function handleCloseActions() {
@@ -334,6 +356,43 @@
   
   // Get the selected person
   $: selectedPerson = selectedPersonId ? findPerson(selectedPersonId) : null;
+
+  // Handle node deletion
+  async function handleDeleteNode(event: CustomEvent<{ nodeId: string, personId: string }>) {
+    const { nodeId, personId } = event.detail;
+    
+    try {
+      isLoading = true;
+      
+      // Delete the node
+      const response = await fetch(`/api/nodes?nodeId=${nodeId}`, {
+        method: 'DELETE'
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update local state
+        nodes = nodes.filter(n => n.id !== nodeId);
+        
+        // Reset selection if this was the selected node
+        if (selectedNodeId === nodeId) {
+          selectedNodeId = null;
+          selectedPersonId = null;
+        }
+      } else {
+        error = result.error || 'Failed to delete node';
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        error = err.message;
+      } else {
+        error = 'An unexpected error occurred while deleting the node';
+      }
+    } finally {
+      isLoading = false;
+    }
+  }
 </script>
 
 <div class="enhanced-family-tree">
@@ -476,6 +535,71 @@
       </div>
     {/if}
     
+    {#if showMediaForm && selectedPersonId}
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="text-lg font-semibold">
+              {#if selectedPerson}
+                Add Media for {selectedPerson.firstName} {selectedPerson.lastName || ''}
+              {:else}
+                Add Media
+              {/if}
+            </h3>
+            <button
+              on:click={() => showMediaForm = false}
+              class="text-gray-400 hover:text-gray-600"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="p-4">
+            <AddMediaForm
+              personId={selectedPersonId}
+              on:mediaAdded={async (e) => {
+                // Refresh media after adding
+                await fetchMedia();
+                showMediaForm = false;
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    {/if}
+    
+    {#if showPersonForm && selectedPersonId}
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="text-lg font-semibold">
+              {#if selectedPerson}
+                Edit {selectedPerson.firstName} {selectedPerson.lastName || ''}
+              {:else}
+                Edit Person
+              {/if}
+            </h3>
+            <button
+              on:click={handleClosePersonForm}
+              class="text-gray-400 hover:text-gray-600"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="p-4">
+            <AddPersonForm
+              treeId={treeId}
+              personId={selectedPersonId}
+              isEditMode={true}
+              on:personUpdated={handlePersonUpdated}
+            />
+          </div>
+        </div>
+      </div>
+    {/if}
     
     <!-- Main tree canvas -->
     <TreeCanvas
@@ -487,7 +611,12 @@
       on:addChild={handleAddChild}
       on:addSibling={handleAddSibling}
       on:editPerson={handleEditPerson}
+      on:addMedia={(e) => {
+        selectedPersonId = e.detail.personId;
+        showMediaForm = true;
+      }}
       on:addPerson={handleAddPerson}
+      on:deleteNode={handleDeleteNode}
     />
     
     <!-- Node action panel removed -->
