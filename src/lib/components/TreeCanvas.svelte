@@ -347,10 +347,10 @@
   $: connections = calculateConnections(treeData);
   
   // Constants for layout
-  const LEVEL_HEIGHT = 180; // Vertical space between levels (reduced to fit more on screen)
-  const NODE_WIDTH = 170;   // Width of a node including margin (slightly reduced)
+  const LEVEL_HEIGHT = 200; // Vertical space between generations
+  const NODE_WIDTH = 170;   // Width of a node including margin
   const NODE_SPACING = 50;  // Additional spacing between siblings
-  const ROOT_Y = -500;       // Y position of the root node (moved down to be more visible)
+  const ROOT_Y = 100;       // Y position of the root node (top of the canvas)
   
   // Hierarchical tree layout calculation
   function calculateTreeLayout(rootId: string | null, nodes: TreeNode[], people: Person[]) {
@@ -413,8 +413,8 @@
     const highestGeneration = Math.max(...Array.from(nodeGenMap.values()));
     
     nodeGenMap.forEach((gen, nodeId) => {
-      // Invert the generations so oldest (highest number) becomes 0
-      nodeGenMap.set(nodeId, highestGeneration - gen);
+      // Keep generations as-is (higher number = older generation)
+      nodeGenMap.set(nodeId, gen);
     });
     
     // Map to track nodes already added to the layout by personId
@@ -445,7 +445,7 @@
       node: rootNode,
       person: rootPerson,
       level: rootGeneration,
-      position: { x: 0, y: ROOT_Y + rootGeneration * LEVEL_HEIGHT },
+      position: { x: 0, y: ROOT_Y + (highestGeneration - rootGeneration) * LEVEL_HEIGHT },
       childIds: [],
       siblingIds: []
     });
@@ -506,7 +506,7 @@
           if (!childPerson) return;
           
           const childX = startX + index * (NODE_WIDTH + NODE_SPACING);
-          const childY = ROOT_Y + childGen * LEVEL_HEIGHT;
+          const childY = ROOT_Y + (highestGeneration - childGen) * LEVEL_HEIGHT;
           
           // Check if position is occupied
           const levelPositions = nodeXPositions.get(childGen) || [];
@@ -569,7 +569,7 @@
           if (!parentPerson) return;
           
           const parentX = startX + index * (NODE_WIDTH + NODE_SPACING);
-          const parentY = ROOT_Y + parentGen * LEVEL_HEIGHT;
+          const parentY = ROOT_Y + (highestGeneration - parentGen) * LEVEL_HEIGHT;
           
           // Check if position is occupied
           const levelPositions = nodeXPositions.get(parentGen) || [];
@@ -622,7 +622,7 @@
           : currentLayoutNode.position.x;
         
         const siblingX = rightmostX + NODE_WIDTH + NODE_SPACING;
-        const siblingY = ROOT_Y + siblingGen * LEVEL_HEIGHT;
+        const siblingY = ROOT_Y + (highestGeneration - siblingGen) * LEVEL_HEIGHT;
         
         layout.push({
           node: siblingNode,
