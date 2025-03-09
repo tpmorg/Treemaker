@@ -4,6 +4,7 @@
   import type { Person, Media, Node as TreeNode } from '$lib/types';
   import EnhancedTreeNode from './EnhancedTreeNode.svelte';
   import NodeConnectionLine from './NodeConnectionLine.svelte';
+  import AddMediaForm from './AddMediaForm.svelte';
   
   // Props
   export let people: Person[] = [];
@@ -15,6 +16,8 @@
   let zoomLevel = 0.8; // Start at 80% zoom
   let selectedNodeId: string | null = null;
   let selectedPersonId: string | null = null;
+  let showMediaForm = false;
+  let showEditForm = false;
   let isPanning = false;
   let startPanX = 0;
   let startPanY = 0;
@@ -28,7 +31,9 @@
     addChild: { personId: string };
     addSibling: { personId: string };
     editPerson: { personId: string };
+    addMedia: { personId: string };
     addPerson: {};
+    deleteNode: { nodeId: string, personId: string };
   }>();
   
   // Helper functions
@@ -321,6 +326,11 @@
     dispatch('addPerson', {});
   }
   
+  function handleDeleteNode(event: CustomEvent<{ personId: string, nodeId: string }>) {
+    const { personId, nodeId } = event.detail;
+    dispatch('deleteNode', { nodeId, personId });
+  }
+  
   interface LayoutNode {
     node: TreeNode;
     person: Person;
@@ -351,6 +361,17 @@
     const processedNodeIds = new Set<string>();
     const nodeGenMap = new Map<string, number>();
     const nodeXPositions = new Map<number, number[]>();
+    
+    // Create a map from personId to the first node found for that person
+    // This ensures we use a consistent node when there are duplicates
+    const personToNodeMap = new Map<string, TreeNode>();
+    
+    // First, populate the personToNodeMap to ensure we consistently use the same node for each person
+    nodes.forEach(node => {
+      if (!personToNodeMap.has(node.personId)) {
+        personToNodeMap.set(node.personId, node);
+      }
+    });
     
     // First pass - determine generation numbers for all nodes (higher generation = older)
     function determineGenerations(nodeId: string, generation: number, visited = new Set<string>()) {
@@ -396,6 +417,10 @@
       nodeGenMap.set(nodeId, highestGeneration - gen);
     });
     
+    // Map to track nodes already added to the layout by personId
+    // This ensures we don't add duplicate nodes for the same person
+    const personNodesInLayout = new Map<string, boolean>();
+    
     // Setup position calculation for each generation
     const genNodesCount = new Map<number, number>();
     nodeGenMap.forEach((gen, nodeId) => {
@@ -411,6 +436,9 @@
     
     const rootGeneration = nodeGenMap.get(rootId) || 0;
     
+    // Track which personIds have already been added to the layout
+    const personIdsInLayout = new Map<string, boolean>();
+    
     // Second pass - calculate positions for each node
     // First place the root node in the center
     layout.push({
@@ -422,6 +450,7 @@
       siblingIds: []
     });
     processedNodeIds.add(rootId);
+    personIdsInLayout.set(rootPerson.id, true);
     
     // Calculate positions for each generation
     const queue: string[] = [rootId];
@@ -448,17 +477,32 @@
       }
       
       // Calculate child positions - place them centered below the parent
-      const childCount = childNodes.length;
       const childGen = currentGen + 1; // Children are one generation below parents
+      
+      // Get all unique person IDs from child nodes
+      const uniqueChildPersonIds = new Set<string>();
+      childNodes.forEach(node => uniqueChildPersonIds.add(node.personId));
+      
+      // Filter out persons already in the layout
+      const unprocessedPersonIds = [...uniqueChildPersonIds].filter(
+        personId => !personIdsInLayout.has(personId)
+      );
+      
+      const childCount = unprocessedPersonIds.length;
       
       if (childCount > 0) {
         const totalChildWidth = childCount * (NODE_WIDTH + NODE_SPACING) - NODE_SPACING;
         const startX = currentLayoutNode.position.x - totalChildWidth / 2 + NODE_WIDTH / 2;
         
-        childNodes.forEach((childNode, index) => {
+        unprocessedPersonIds.forEach((personId, index) => {
+          // Get the consistent node for this person
+          const childNode = personToNodeMap.get(personId);
+          if (!childNode) return;
+          
+          // Skip if we've already processed this node
           if (processedNodeIds.has(childNode.id)) return;
           
-          const childPerson = people.find(p => p.id === childNode.personId);
+          const childPerson = people.find(p => p.id === personId);
           if (!childPerson) return;
           
           const childX = startX + index * (NODE_WIDTH + NODE_SPACING);
@@ -490,22 +534,38 @@
           nodeXPositions.set(childGen, levelPositions);
           
           processedNodeIds.add(childNode.id);
+          personIdsInLayout.set(personId, true);
           queue.push(childNode.id);
         });
       }
       
       // Calculate parent positions
-      const parentCount = parentNodes.length;
       const parentGen = currentGen - 1; // Parents are one generation above children
+      
+      // Get all unique person IDs from parent nodes
+      const uniqueParentPersonIds = new Set<string>();
+      parentNodes.forEach(node => uniqueParentPersonIds.add(node.personId));
+      
+      // Filter out persons already in the layout
+      const unprocessedParentIds = [...uniqueParentPersonIds].filter(
+        personId => !personIdsInLayout.has(personId)
+      );
+      
+      const parentCount = unprocessedParentIds.length;
       
       if (parentCount > 0) {
         const totalParentWidth = parentCount * (NODE_WIDTH + NODE_SPACING) - NODE_SPACING;
         const startX = currentLayoutNode.position.x - totalParentWidth / 2 + NODE_WIDTH / 2;
         
-        parentNodes.forEach((parentNode, index) => {
+        unprocessedParentIds.forEach((personId, index) => {
+          // Get the consistent node for this person
+          const parentNode = personToNodeMap.get(personId);
+          if (!parentNode) return;
+          
+          // Skip if we've already processed this node
           if (processedNodeIds.has(parentNode.id)) return;
           
-          const parentPerson = people.find(p => p.id === parentNode.personId);
+          const parentPerson = people.find(p => p.id === personId);
           if (!parentPerson) return;
           
           const parentX = startX + index * (NODE_WIDTH + NODE_SPACING);
@@ -535,6 +595,7 @@
           nodeXPositions.set(parentGen, levelPositions);
           
           processedNodeIds.add(parentNode.id);
+          personIdsInLayout.set(personId, true);
           queue.push(parentNode.id);
         });
       }
@@ -542,7 +603,13 @@
       // Calculate sibling positions
       const siblingGen = currentGen; // Siblings are in the same generation
       
-      siblingNodes.forEach((siblingNode) => {
+      // Filter out siblings whose personId is already represented in the layout
+      const uniqueSiblingNodes = siblingNodes.filter(siblingNode => {
+        const siblingPerson = people.find(p => p.id === siblingNode.personId);
+        return siblingPerson && !personNodesInLayout.has(siblingPerson.id);
+      });
+      
+      uniqueSiblingNodes.forEach((siblingNode) => {
         if (processedNodeIds.has(siblingNode.id)) return;
         
         const siblingPerson = people.find(p => p.id === siblingNode.personId);
@@ -572,6 +639,7 @@
         nodeXPositions.set(siblingGen, levelPositions);
         
         processedNodeIds.add(siblingNode.id);
+        personNodesInLayout.set(siblingPerson.id, true);
         queue.push(siblingNode.id);
       });
     }
@@ -708,6 +776,7 @@
             <div class="absolute" style="left: {item.position.x}px; top: {item.position.y}px; transform: translate(-50%, -50%);">
               <EnhancedTreeNode
                 person={item.person}
+                nodeId={item.node.id}
                 primaryMedia={getPrimaryMedia(item.person.id)}
                 isSelected={selectedNodeId === item.node.id}
                 on:select={handleNodeSelect}
@@ -715,6 +784,7 @@
                 on:addChild={handleAddChild}
                 on:addSibling={handleAddSibling}
                 on:edit={handleEditPerson}
+                on:delete={handleDeleteNode}
               />
             </div>
           {/each}
@@ -805,13 +875,22 @@
             </button>
           </div>
           
-          <!-- Edit person button -->
-          <button 
-            on:click={() => dispatch('editPerson', { personId: selectedPersonId })}
-            class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors mb-6"
-          >
-            Edit Person
-          </button>
+          <!-- Action buttons -->
+          <div class="grid grid-cols-2 gap-3 mb-6">
+            <button 
+              on:click={() => showEditForm = true}
+              class="py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Edit Person
+            </button>
+            
+            <button 
+              on:click={() => showMediaForm = true}
+              class="py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+            >
+              Add Photo
+            </button>
+          </div>
           
           <!-- Show family relationships -->
           <div class="mt-6">
@@ -872,6 +951,62 @@
       </div>
     {/if}
   </div>
+  
+  <!-- Edit Person Form Modal -->
+  {#if showEditForm && selectedPersonId}
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-4 border-b flex justify-between items-center">
+          <h3 class="text-lg font-semibold">Edit Person</h3>
+          <button
+            on:click={() => showEditForm = false}
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-4">
+          <!-- Dispatch to parent to handle editing -->
+          <button 
+            on:click={() => {
+              dispatch('editPerson', { personId: selectedPersonId });
+              showEditForm = false;
+            }}
+            class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Continue to Edit
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+  
+  <!-- Add Media Form Modal -->
+  {#if showMediaForm && selectedPersonId}
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-4 border-b flex justify-between items-center">
+          <h3 class="text-lg font-semibold">Add Photo</h3>
+          <button
+            on:click={() => showMediaForm = false}
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-5">
+          <AddMediaForm 
+            personId={selectedPersonId} 
+            on:mediaAdded={() => showMediaForm = false}
+          />
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
