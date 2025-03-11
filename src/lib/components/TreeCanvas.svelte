@@ -339,9 +339,9 @@
   $: connections = calculateConnections(treeData);
   
   // Constants for layout
-  const LEVEL_HEIGHT = 200; // Vertical space between generations
-  const NODE_WIDTH = 170;   // Width of a node including margin
-  const NODE_SPACING = 50;  // Additional spacing between siblings
+  const LEVEL_HEIGHT = 250; // Vertical space between generations
+  const NODE_WIDTH = 200;   // Width of a node including margin
+  const NODE_SPACING = 80;  // Additional spacing between siblings
   const ROOT_Y = 100;       // Y position of the root node (top of the canvas)
   
   // Hierarchical tree layout calculation
@@ -704,6 +704,7 @@
       on:click={handleZoomIn} 
       class="p-1 rounded hover:bg-gray-100" 
       title="Zoom In"
+      aria-label="Zoom In"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -713,6 +714,7 @@
       on:click={handleZoomOut} 
       class="p-1 rounded hover:bg-gray-100" 
       title="Zoom Out"
+      aria-label="Zoom Out"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
@@ -723,6 +725,7 @@
       on:click={handleResetZoom} 
       class="p-1 rounded hover:bg-gray-100" 
       title="Reset View"
+      aria-label="Reset Zoom"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"></path>
@@ -996,6 +999,7 @@
         <div class="p-4 border-b flex justify-between items-center">
           <h3 class="text-lg font-semibold">Edit Person</h3>
           <button
+            aria-label="Show Edit"
             on:click={() => showEditForm = false}
             class="text-gray-400 hover:text-gray-600"
           >
@@ -1029,6 +1033,7 @@
         <div class="p-4 border-b flex justify-between items-center">
           <h3 class="text-lg font-semibold">Add Photo</h3>
           <button
+            aria-label="Show Media Picker"
             on:click={() => showMediaForm = false}
             class="text-gray-400 hover:text-gray-600"
           >

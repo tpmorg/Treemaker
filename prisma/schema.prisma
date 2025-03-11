@@ -135,8 +135,8 @@ model Relationship {
   id           String    @id @default(cuid())
   fromPersonId String
   toPersonId   String
-  type         String
-  subtype      String?
+  type         String    @default("SPOUSE") @db.VarChar(50)
+  subtype      String?   @db.VarChar(50)
   startDate    DateTime?
   endDate      DateTime?
   treeId       String
@@ -147,4 +147,9 @@ model Relationship {
   fromPerson   Person    @relation("FromRelation", fields: [fromPersonId], references: [id])
 
   @@unique([fromPersonId, toPersonId, type, subtype])
+  @@index([type])
+  @@index([fromPersonId])
+  @@index([toPersonId])
+  
+  @@check(type in ('SPOUSE', 'SIBLING', 'OTHER'))
 }

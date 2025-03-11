@@ -1,6 +1,5 @@
 <!-- +page.svelte -->
 <script lang="ts">
-  import FamilyTree from '$lib/components/FamilyTree.svelte';
   import AddUserForm from '$lib/components/AddUserForm.svelte';
   import LoginForm from '$lib/components/LoginForm.svelte';
 
@@ -61,9 +60,7 @@
   </header>
 
   <main class="max-w-7xl mx-auto py-8">
-    <div class="bg-white rounded-lg shadow-sm p-6 print:shadow-none print:p-0">
-      <FamilyTree data={familyData} rootId="1" />
-    </div>
+   
   </main>
 
   <footer class="p-4 text-center text-gray-600 print:hidden">

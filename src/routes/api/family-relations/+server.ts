@@ -87,52 +87,108 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     
     try {
         const data = await request.json();
-        const { parentId, childId, relationType, treeId } = data;
+        const { fromPersonId, toPersonId, relationshipType, relationType, treeId } = data;
         
-        if (!parentId || !childId || !relationType || !treeId) {
+        if (!fromPersonId || !toPersonId || !relationshipType || !treeId) {
             return json({ 
                 success: false, 
-                error: 'Parent ID, Child ID, Relation Type, and Tree ID are required' 
+                error: 'From Person ID, To Person ID, Relationship Type, and Tree ID are required' 
             }, { status: 400 });
         }
         
-        // Validate the relation type
-        const validRelationTypes = ['BIOLOGICAL', 'ADOPTIVE', 'STEP', 'FOSTER'];
-        if (!validRelationTypes.includes(relationType)) {
+        // Validate the relationship type
+        const validRelationshipTypes = ['FAMILY', 'RELATIONSHIP', 'SPOUSE'];
+        if (!validRelationshipTypes.includes(relationshipType)) {
             return json({ 
                 success: false, 
-                error: `Relation type must be one of: ${validRelationTypes.join(', ')}` 
+                error: `Relationship type must be one of: ${validRelationshipTypes.join(', ')}` 
             }, { status: 400 });
         }
         
-        // Check if the relation already exists
-        const existingRelation = await prisma.familyRelation.findFirst({
-            where: {
-                parentId,
-                childId,
-                relationType
+        // For FAMILY relationships, validate the relation type
+        if (relationshipType === 'FAMILY') {
+            if (!relationType) {
+                return json({ 
+                    success: false, 
+                    error: 'Relation Type is required for family relationships' 
+                }, { status: 400 });
             }
-        });
-        
-        if (existingRelation) {
+            
+            const validRelationTypes = ['BIOLOGICAL', 'ADOPTIVE', 'STEP', 'FOSTER'];
+            if (!validRelationTypes.includes(relationType)) {
+                return json({ 
+                    success: false, 
+                    error: `Relation type must be one of: ${validRelationTypes.join(', ')}` 
+                }, { status: 400 });
+            }
+        }
+
+        if (relationshipType === 'FAMILY') {
+                // Check if the family relation already exists
+                const existingFamilyRelation = await prisma.familyRelation.findFirst({
+                    where: {
+                        parentId: fromPersonId,
+                        childId: toPersonId,
+                        relationType
+                    }
+                });
+                
+                if (existingFamilyRelation) {
+                    return json({ 
+                        success: false, 
+                        error: 'This family relation already exists' 
+                    }, { status: 400 });
+                }
+                
+                // Create the family relation
+                const familyRelation = await prisma.familyRelation.create({
+                    data: {
+                        parentId: fromPersonId,
+                        childId: toPersonId,
+                        relationType,
+                        treeId
+                    }
+                });
+                
+                return json({ success: true, relation: familyRelation });
+            } else if (relationshipType === 'RELATIONSHIP' || relationshipType === 'SPOUSE') {
+                // Check if the relationship already exists
+                const existingRelationship = await prisma.relationship.findFirst({
+                    where: {
+                        OR: [
+                            { fromPersonId, toPersonId },
+                            { fromPersonId: toPersonId, toPersonId: fromPersonId }
+                        ],
+                        type: relationshipType === 'SPOUSE' ? 'SPOUSE' : relationType
+                    }
+                });
+                
+                if (existingRelationship) {
+                    return json({ 
+                        success: false, 
+                        error: 'This relationship already exists' 
+                    }, { status: 400 });
+                }
+                
+                // Create the relationship
+                const relationship = await prisma.relationship.create({
+                    data: {
+                        fromPersonId,
+                        toPersonId,
+                        type: relationshipType === 'SPOUSE' ? 'SPOUSE' : relationType,
+                        treeId
+                    }
+                });
+                
+                return json({ success: true, relation: relationship });
+            }
+            
             return json({ 
                 success: false, 
-                error: 'This family relation already exists' 
+                error: 'Invalid relationship type' 
             }, { status: 400 });
         }
-        
-        // Create the relation
-        const relation = await prisma.familyRelation.create({
-            data: {
-                parentId,
-                childId,
-                relationType,
-                treeId
-            }
-        });
-        
-        return json({ success: true, relation });
-    } catch (error) {
+    catch (error) {
         console.error('Error creating family relation:', error);
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         return json({ success: false, error: message }, { status: 500 });
@@ -146,7 +202,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
     }
     
     try {
-        const { id } = params;
+        const id = params.id as string;
         
         if (!id) {
             return json({ success: false, error: 'Relation ID is required' }, { status: 400 });

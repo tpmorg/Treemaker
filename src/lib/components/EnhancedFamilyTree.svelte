@@ -324,6 +324,20 @@
             treeId
           })
         });
+      } else if (relationshipType.toUpperCase() === 'SPOUSE') {
+        // Create spouse relationship
+        const relationResponse = await fetch('/api/relationships', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fromPersonId: personId,
+            toPersonId: relatedToPersonId,
+            type: 'SPOUSE',
+            treeId
+          })
+        });
       }
       
       // Update local state
