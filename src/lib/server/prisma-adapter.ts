@@ -57,14 +57,15 @@ export class CustomPrismaAdapter implements Adapter {
     async setSession(session: DatabaseSession): Promise<void> {
         const now = Date.now();
         const thirtyDays = 1000 * 60 * 60 * 24 * 30;
-        const fourteenDays = 1000 * 60 * 60 * 24 * 14;
-
+        
+        // Use the same expiration time for both active_expires and idle_expires
+        // to be consistent with Lucia configuration
         await this.prisma.session.create({
             data: {
                 id: session.id,
                 user_id: session.userId,
                 active_expires: BigInt(now + thirtyDays),
-                idle_expires: BigInt(now + fourteenDays),
+                idle_expires: BigInt(now + thirtyDays),
                 ...session.attributes
             }
         });
@@ -74,16 +75,23 @@ export class CustomPrismaAdapter implements Adapter {
         sessionId: string,
         expiresAt: Date
     ): Promise<void> {
+        // Safely convert Date to BigInt
         const timestamp = expiresAt.getTime();
-        await this.prisma.session.update({
-            where: {
-                id: sessionId
-            },
-            data: {
-                active_expires: BigInt(timestamp),
-                idle_expires: BigInt(timestamp)
-            }
-        });
+        
+        try {
+            await this.prisma.session.update({
+                where: {
+                    id: sessionId
+                },
+                data: {
+                    active_expires: BigInt(timestamp),
+                    idle_expires: BigInt(timestamp)
+                }
+            });
+        } catch (error) {
+            console.error("Error updating session expiration:", error);
+            throw error;
+        }
     }
 
     async deleteExpiredSessions(): Promise<void> {
@@ -109,11 +117,17 @@ export class CustomPrismaAdapter implements Adapter {
 
 function transformIntoDatabaseSession(raw: Session): DatabaseSession {
     const { id, user_id, active_expires, idle_expires, ...attributes } = raw;
+    
+    // Safely convert BigInt to number for Date constructor
+    // This handles potential large BigInt values
+    const expiresAtTimestamp = typeof active_expires === 'bigint' 
+        ? Number(active_expires)
+        : Number(active_expires);
+        
     return {
         id,
         userId: user_id,
-        // Use active_expires as the main expiration time
-        expiresAt: new Date(Number(active_expires)),
+        expiresAt: new Date(expiresAtTimestamp),
         attributes
     };
 }

@@ -5,6 +5,7 @@
   import EnhancedTreeNode from './EnhancedTreeNode.svelte';
   import NodeConnectionLine from './NodeConnectionLine.svelte';
   import AddMediaForm from './AddMediaForm.svelte';
+    import EditPerson from './EditPerson.svelte';
   
   // Props
   export let people: Person[] = [];
@@ -931,6 +932,12 @@
               Add Photo
             </button>
           </div>
+
+          {#if showEditForm && selectedPersonId}
+          <div class="grid grid-cols-1 gap-3 mb-6">
+            <EditPerson person={findPerson(selectedPersonId)!} />
+          </div>
+          {/if}
           
           <!-- Show family relationships -->
           <div class="mt-6">
@@ -992,39 +999,7 @@
     {/if}
   </div>
   
-  <!-- Edit Person Form Modal -->
-  {#if showEditForm && selectedPersonId}
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
-      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div class="p-4 border-b flex justify-between items-center">
-          <h3 class="text-lg font-semibold">Edit Person</h3>
-          <button
-            aria-label="Show Edit"
-            on:click={() => showEditForm = false}
-            class="text-gray-400 hover:text-gray-600"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
-        </div>
-        <div class="p-4">
-          <!-- Dispatch to parent to handle editing -->
-          <button 
-            on:click={() => {
-              if (selectedPersonId) {
-                dispatch('editPerson', { personId: selectedPersonId });
-                showEditForm = false;
-              }
-            }}
-            class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            Continue to Edit
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+
   
   <!-- Add Media Form Modal -->
   {#if showMediaForm && selectedPersonId}

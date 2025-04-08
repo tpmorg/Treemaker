@@ -87,12 +87,43 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     
     try {
         const data = await request.json();
-        const { fromPersonId, toPersonId, relationshipType, relationType, treeId } = data;
         
-        if (!fromPersonId || !toPersonId || !relationshipType || !treeId) {
+        // Handle both parameter formats for backward compatibility
+        // Format 1: fromPersonId, toPersonId, relationshipType, relationType, treeId
+        // Format 2: parentId, childId, relationType, treeId
+        
+        let fromPersonId = data.fromPersonId;
+        let toPersonId = data.toPersonId;
+        let relationshipType = data.relationshipType;
+        let relationType = data.relationType;
+        const treeId = data.treeId;
+        
+        // If using parentId/childId format, map to fromPersonId/toPersonId
+        if (!fromPersonId && data.parentId) {
+            fromPersonId = data.parentId;
+        }
+        
+        if (!toPersonId && data.childId) {
+            toPersonId = data.childId;
+        }
+        
+        // If parentId/childId format is used but no relationshipType is provided, set it to 'FAMILY'
+        if (!relationshipType && data.parentId && data.childId) {
+            relationshipType = 'FAMILY';
+        }
+        
+        // Validate required fields
+        if (!fromPersonId || !toPersonId || !treeId) {
             return json({ 
                 success: false, 
-                error: 'From Person ID, To Person ID, Relationship Type, and Tree ID are required' 
+                error: 'Person IDs and Tree ID are required' 
+            }, { status: 400 });
+        }
+        
+        if (!relationshipType) {
+            return json({ 
+                success: false, 
+                error: 'Relationship Type is required' 
             }, { status: 400 });
         }
         
@@ -108,10 +139,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         // For FAMILY relationships, validate the relation type
         if (relationshipType === 'FAMILY') {
             if (!relationType) {
-                return json({ 
-                    success: false, 
-                    error: 'Relation Type is required for family relationships' 
-                }, { status: 400 });
+                // Default to BIOLOGICAL if not specified
+                relationType = 'BIOLOGICAL';
             }
             
             const validRelationTypes = ['BIOLOGICAL', 'ADOPTIVE', 'STEP', 'FOSTER'];
@@ -195,14 +224,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
 };
 
-// DELETE /api/family-relations/:id
-export const DELETE: RequestHandler = async ({ params, locals }) => {
+// DELETE /api/family-relations
+export const DELETE: RequestHandler = async ({ url, locals }) => {
     if (!locals.user) {
         return json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     
     try {
-        const id = params.id as string;
+        const id = url.searchParams.get('id');
         
         if (!id) {
             return json({ success: false, error: 'Relation ID is required' }, { status: 400 });

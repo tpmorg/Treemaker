@@ -132,14 +132,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
 };
 
-// DELETE /api/relationships/:id
-export const DELETE: RequestHandler = async ({ params, locals }) => {
+// DELETE /api/relationships
+export const DELETE: RequestHandler = async ({ url, locals }) => {
     if (!locals.user) {
         return json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
     
     try {
-        const { id } = params;
+        const id = url.searchParams.get('id');
         
         if (!id) {
             return json({ success: false, error: 'Relationship ID is required' }, { status: 400 });
