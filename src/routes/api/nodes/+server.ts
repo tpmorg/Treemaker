@@ -132,44 +132,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             });
         }
         
-        // If creating a parent-child or sibling relationship, also create the family relation
-        if (data.relationType && data.relatedToPersonId) {
-            if (data.relationType === 'PARENT') {
-                // Create parent-child relationship (current person is the parent)
-                await prisma.familyRelation.create({
-                    data: {
-                        parentId: data.personId,
-                        childId: data.relatedToPersonId,
-                        relationType: data.subType || 'BIOLOGICAL',
-                        treeId: data.treeId
-                    }
-                });
-            } else if (data.relationType === 'CHILD') {
-                // Create child-parent relationship (current person is the child)
-                await prisma.familyRelation.create({
-                    data: {
-                        parentId: data.relatedToPersonId,
-                        childId: data.personId,
-                        relationType: data.subType || 'BIOLOGICAL',
-                        treeId: data.treeId
-                    }
-                });
-            } else if (data.relationType === 'SIBLING' || data.relationType === 'SPOUSE') {
-                // Create sibling or spouse relationship
-                await prisma.relationship.create({
-                    data: {
-                        fromPersonId: data.personId,
-                        toPersonId: data.relatedToPersonId,
-                        type: data.relationType,
-                        subtype: data.subType,
-                        treeId: data.treeId
-                    }
-                });
-            }
-        }
-        
-        return json({ 
-            success: true, 
+        // Prepare response data
+        const responseData: any = {
+            success: true,
             node: {
                 id: node.id,
                 personId: node.personId,
@@ -178,7 +143,60 @@ export const POST: RequestHandler = async ({ request, locals }) => {
                 y: node.y,
                 createdAt: node.createdAt
             }
-        });
+        };
+        
+        // If creating a parent-child or sibling relationship, also create the family relation
+        if (data.relationType && data.relatedToPersonId) {
+            // Track if a relationship was created
+            let relationshipCreated = false;
+            
+            try {
+                if (data.relationType === 'PARENT') {
+                    // Create parent-child relationship (current person is the parent)
+                    await prisma.familyRelation.create({
+                        data: {
+                            parentId: data.personId,
+                            childId: data.relatedToPersonId,
+                            relationType: data.subType || 'BIOLOGICAL',
+                            treeId: data.treeId
+                        }
+                    });
+                    relationshipCreated = true;
+                } else if (data.relationType === 'CHILD') {
+                    // Create child-parent relationship (current person is the child)
+                    await prisma.familyRelation.create({
+                        data: {
+                            parentId: data.relatedToPersonId,
+                            childId: data.personId,
+                            relationType: data.subType || 'BIOLOGICAL',
+                            treeId: data.treeId
+                        }
+                    });
+                    relationshipCreated = true;
+                } else if (data.relationType === 'SIBLING' || data.relationType === 'SPOUSE') {
+                    // Create sibling or spouse relationship
+                    await prisma.relationship.create({
+                        data: {
+                            fromPersonId: data.personId,
+                            toPersonId: data.relatedToPersonId,
+                            type: data.relationType,
+                            subtype: data.subType,
+                            treeId: data.treeId
+                        }
+                    });
+                    relationshipCreated = true;
+                }
+            } catch (relationError) {
+                console.error('Error creating relationship:', relationError);
+                // We'll continue even if relationship creation fails
+                // The node was created successfully, and the client can retry relationship creation
+            }
+            
+            // Only include relationshipCreated in the response if relationship data was provided
+            responseData.relationshipCreated = relationshipCreated;
+        }
+        
+        return json(responseData);
     } catch (error) {
         console.error('Error creating node:', error);
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';

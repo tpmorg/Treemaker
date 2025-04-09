@@ -91,6 +91,21 @@ beforeAll(async () => {
       UNIQUE(fromPersonId, toPersonId, type, subtype)
     )
   `);
+  
+  // Create Node table
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS Node (
+      id TEXT PRIMARY KEY,
+      personId TEXT NOT NULL,
+      treeId TEXT NOT NULL,
+      x REAL,
+      y REAL,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL,
+      FOREIGN KEY (personId) REFERENCES Person(id),
+      FOREIGN KEY (treeId) REFERENCES Tree(id)
+    )
+  `);
 });
 
 beforeEach(async () => {
@@ -102,6 +117,7 @@ beforeEach(async () => {
     // Clear all tables
     await prisma.$executeRaw`DELETE FROM Relationship;`;
     await prisma.$executeRaw`DELETE FROM FamilyRelation;`;
+    await prisma.$executeRaw`DELETE FROM Node;`;
     await prisma.$executeRaw`DELETE FROM Person;`;
     await prisma.$executeRaw`DELETE FROM Tree;`;
     await prisma.$executeRaw`DELETE FROM User;`;

@@ -229,19 +229,27 @@
   }
   
   // Create a visual node for a person
-  async function createVisualNode(personId: string, x = 0, y = 0) {
+  async function createVisualNode(personId: string, x = 0, y = 0, relatedToId?: string, relationType?: string) {
     try {
+      const requestBody: any = {
+        personId,
+        treeId,
+        x,
+        y
+      };
+      
+      // Add relationship data if provided
+      if (relatedToId && relationType) {
+        requestBody.relatedToPersonId = relatedToId;
+        requestBody.relationType = relationType;
+      }
+      
       const response = await fetch('/api/nodes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          personId,
-          treeId,
-          x,
-          y
-        })
+        body: JSON.stringify(requestBody)
       });
       
       const result = await response.json();
@@ -260,7 +268,7 @@
   // Create a relationship node and connection
   async function createRelationshipNode(personId: string, relatedToPersonId: string, relationshipType: string) {
     try {
-      // First create the visual node
+      // Create the visual node with relationship data
       const response = await fetch('/api/nodes', {
         method: 'POST',
         headers: {
@@ -270,7 +278,10 @@
           personId,
           treeId,
           x: 0,
-          y: 0
+          y: 0,
+          relatedToPersonId,
+          relationType: relationshipType,
+          subType: 'BIOLOGICAL' // Default subtype
         })
       });
       
@@ -281,63 +292,66 @@
         return;
       }
       
-      // Now create the appropriate relationship
-      if (relationshipType.toUpperCase() === 'PARENT') {
-        // Create parent-child relationship (current person is the parent)
-        const relationResponse = await fetch('/api/family-relations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            parentId: personId,
-            childId: relatedToPersonId,
-            relationType: 'BIOLOGICAL',
-            treeId
-          })
-        });
-      } else if (relationshipType.toUpperCase() === 'CHILD') {
-        // Create child-parent relationship (current person is the child)
-        const relationResponse = await fetch('/api/family-relations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            parentId: relatedToPersonId,
-            childId: personId,
-            relationType: 'BIOLOGICAL',
-            treeId
-          })
-        });
-      } else if (relationshipType.toUpperCase() === 'SIBLING') {
-        // Create sibling relationship
-        const relationResponse = await fetch('/api/relationships', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            fromPersonId: personId,
-            toPersonId: relatedToPersonId,
-            type: 'SIBLING',
-            treeId
-          })
-        });
-      } else if (relationshipType.toUpperCase() === 'SPOUSE') {
-        // Create spouse relationship
-        const relationResponse = await fetch('/api/relationships', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            fromPersonId: personId,
-            toPersonId: relatedToPersonId,
-            type: 'SPOUSE',
-            treeId
-          })
-        });
+      // If the node API fails to create the relationship, we'll create it manually as a fallback
+      if (!result.relationshipCreated) {
+        // Now create the appropriate relationship
+        if (relationshipType.toUpperCase() === 'PARENT') {
+          // Create parent-child relationship (current person is the parent)
+          const relationResponse = await fetch('/api/family-relations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              parentId: personId,
+              childId: relatedToPersonId,
+              relationType: 'BIOLOGICAL',
+              treeId
+            })
+          });
+        } else if (relationshipType.toUpperCase() === 'CHILD') {
+          // Create child-parent relationship (current person is the child)
+          const relationResponse = await fetch('/api/family-relations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              parentId: relatedToPersonId,
+              childId: personId,
+              relationType: 'BIOLOGICAL',
+              treeId
+            })
+          });
+        } else if (relationshipType.toUpperCase() === 'SIBLING') {
+          // Create sibling relationship
+          const relationResponse = await fetch('/api/relationships', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              fromPersonId: personId,
+              toPersonId: relatedToPersonId,
+              type: 'SIBLING',
+              treeId
+            })
+          });
+        } else if (relationshipType.toUpperCase() === 'SPOUSE') {
+          // Create spouse relationship
+          const relationResponse = await fetch('/api/relationships', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              fromPersonId: personId,
+              toPersonId: relatedToPersonId,
+              type: 'SPOUSE',
+              treeId
+            })
+          });
+        }
       }
       
       // Update local state
@@ -466,9 +480,11 @@
                     <button
                       on:click={() => {
                         if (selectedSearchPerson) {
-                          createVisualNode(selectedSearchPerson.id);
                           if (relationshipType && relatedToPersonId) {
-                            createRelationshipNode(selectedSearchPerson.id, relatedToPersonId, relationshipType);
+                            // Pass relationship info directly to createVisualNode
+                            createVisualNode(selectedSearchPerson.id, 0, 0, relatedToPersonId, relationshipType);
+                          } else {
+                            createVisualNode(selectedSearchPerson.id);
                           }
                           handleCloseAddPersonForm();
                         }
