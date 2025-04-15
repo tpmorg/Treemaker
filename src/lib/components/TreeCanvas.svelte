@@ -2,7 +2,7 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import type { Person, Media, Node as TreeNode } from '$lib/types';
-  import EnhancedTreeNode from './EnhancedTreeNode.svelte';
+  import EnhancedTreeNode from './TreeNode.svelte';
   import NodeConnectionLine from './NodeConnectionLine.svelte';
   import AddMediaForm from './AddMediaForm.svelte';
     import EditPerson from './EditPerson.svelte';

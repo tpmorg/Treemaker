@@ -2,7 +2,7 @@
   import { page } from "$app/stores";
   import type { Tree, Person, Node, Media } from "$lib/types";
   import AddTreeForm from "$lib/components/AddTreeForm.svelte";
-  import EnhancedFamilyTree from "$lib/components/EnhancedFamilyTree.svelte";
+  import EnhancedFamilyTree from "$lib/components/FamilyTree.svelte";
 
   // Tree and person management
   let selectedTreeId = "";

@@ -1,3 +1,49 @@
+
+# TreeMaker
+
+A family tree visualization application built with SvelteKit and TypeScript.
+
+## Tech Stack
+
+- **Frontend Framework**: SvelteKit 2.16.0 with Svelte 5.0.0
+- **Styling**: TailwindCSS
+- **Database**: SQLite with Prisma ORM
+- **Build Tool**: Vite 6.0.0
+- **Language**: TypeScript 5.0.0
+
+## EnhancedFamilyTree Component Overview
+
+The `EnhancedFamilyTree` component is the main controller for rendering and managing an interactive family tree visualization. It handles loading and maintaining data for people, tree nodes, and associated media, and provides user interfaces for adding, editing, and deleting people and relationships.
+
+### Key Associated Components
+
+- **TreeCanvas.svelte**: Responsible for rendering the family tree layout. It calculates node positions based on family relationships (parents, children, siblings) and renders connection lines between nodes. It supports zooming, panning, and node selection. It also includes a side panel for detailed person information and actions.
+
+- **EnhancedTreeNode.svelte**: Renders individual nodes in the tree, displaying person details such as photo, name, and birth/death years. It provides UI for selecting and deleting nodes with confirmation.
+
+- **AddPersonForm.svelte** and **AddExistingUserForm.svelte**: Used within modals to add new people or link existing users to the tree.
+
+- **PersonSearch.svelte**: Provides search functionality to find existing people when adding them to the tree.
+
+- **AddMediaForm.svelte**: Allows adding photos or other media to a person in the tree.
+
+### Component Interaction Diagram
+
+```mermaid
+graph TD
+  EF[EnhancedFamilyTree] --> TC[TreeCanvas]
+  TC --> ETN[EnhancedTreeNode]
+  EF --> APF[AddPersonForm]
+  EF --> AEUF[AddExistingUserForm]
+  EF --> PS[PersonSearch]
+  EF --> AMF[AddMediaForm]
+```
+
+This architecture cleanly separates concerns: `EnhancedFamilyTree` manages data and state, `TreeCanvas` handles layout and rendering, and `EnhancedTreeNode` manages individual node UI. The form components support user input workflows.
+
+## Usage
+
+The `EnhancedFamilyTree` component expects props such as `treeId`, and optionally arrays of `people`, `nodes`, and `media`. It fetches data if not provided and emits events for person additions, updates, and errors.
 # TreeMaker
 
 A family tree visualization application built with SvelteKit and TypeScript.
