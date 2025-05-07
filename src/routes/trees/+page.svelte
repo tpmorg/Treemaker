@@ -77,12 +77,16 @@
     showEnhancedAddPerson = true;
   }
   
+  import { onMount } from 'svelte';
+
   // Initialize data on page load
-  if (trees.length > 0) {
-    selectedTreeId = trees[0].id;
-    fetchPeople(selectedTreeId);
-    fetchNodes();
-  }
+  onMount(() => {
+    if (trees.length > 0) {
+      selectedTreeId = trees[0].id;
+      fetchPeople(selectedTreeId);
+      fetchNodes();
+    }
+  });
 </script>
 
 <div class="min-h-screen bg-gray-50">

@@ -435,6 +435,7 @@
               {/if}
             </h3>
             <button
+              aria-label="Close Add Person Form"
               on:click={handleCloseAddPersonForm}
               class="text-gray-400 hover:text-gray-600"
             >
@@ -529,6 +530,7 @@
               {/if}
             </h3>
             <button
+              aria-label="Close Add Existing User Form"
               on:click={handleCloseAddExistingUserForm}
               class="text-gray-400 hover:text-gray-600"
             >
@@ -562,6 +564,7 @@
               {/if}
             </h3>
             <button
+              aria-label="Close Add Media Form"
               on:click={() => showMediaForm = false}
               class="text-gray-400 hover:text-gray-600"
             >
@@ -596,6 +599,7 @@
               {/if}
             </h3>
             <button
+              aria-label="Close Edit Person Form"
               on:click={handleClosePersonForm}
               class="text-gray-400 hover:text-gray-600"
             >

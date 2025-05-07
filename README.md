@@ -31,19 +31,19 @@ The `EnhancedFamilyTree` component is the main controller for rendering and mana
 
 ```mermaid
 graph TD
-  EF[EnhancedFamilyTree] --> TC[TreeCanvas]
-  TC --> ETN[EnhancedTreeNode]
+  EF[FamilyTree] --> TC[TreeCanvas]
+  TC --> TN[TreeNode]
   EF --> APF[AddPersonForm]
   EF --> AEUF[AddExistingUserForm]
   EF --> PS[PersonSearch]
   EF --> AMF[AddMediaForm]
 ```
 
-This architecture cleanly separates concerns: `EnhancedFamilyTree` manages data and state, `TreeCanvas` handles layout and rendering, and `EnhancedTreeNode` manages individual node UI. The form components support user input workflows.
+This architecture cleanly separates concerns: `FamilyTree` manages data and state, `TreeCanvas` handles layout and rendering, and `TreeNode` manages individual node UI. The form components support user input workflows.
 
 ## Usage
 
-The `EnhancedFamilyTree` component expects props such as `treeId`, and optionally arrays of `people`, `nodes`, and `media`. It fetches data if not provided and emits events for person additions, updates, and errors.
+The `FamilyTree` component expects props such as `treeId`, and optionally arrays of `people`, `nodes`, and `media`. It fetches data if not provided and emits events for person additions, updates, and errors.
 # TreeMaker
 
 A family tree visualization application built with SvelteKit and TypeScript.

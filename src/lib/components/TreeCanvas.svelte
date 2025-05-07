@@ -342,7 +342,7 @@
   // Constants for layout
   const LEVEL_HEIGHT = 250; // Vertical space between generations
   const NODE_WIDTH = 200;   // Width of a node including margin
-  const NODE_SPACING = 80;  // Additional spacing between siblings
+  const NODE_SPACING = 100;  // Increased spacing between siblings and nodes to reduce overlap
   const ROOT_Y = 100;       // Y position of the root node (top of the canvas)
   
   // Hierarchical tree layout calculation
@@ -1008,7 +1008,7 @@
         <div class="p-4 border-b flex justify-between items-center">
           <h3 class="text-lg font-semibold">Add Photo</h3>
           <button
-            aria-label="Show Media Picker"
+            aria-label="Close Add Media Form"
             on:click={() => showMediaForm = false}
             class="text-gray-400 hover:text-gray-600"
           >
